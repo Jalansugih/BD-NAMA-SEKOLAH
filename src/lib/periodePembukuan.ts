@@ -73,20 +73,34 @@ export async function updateTahunAjaranAktif(tahunAjaran: string): Promise<{ suc
 }
 
 export async function updatePeriodeAktifSettings(
-  id: string | null,
+  _id: string | null,
   tahunAjaran: string,
   tanggalMulai: string,
   saldoAwal: number
 ): Promise<{ success: boolean; message?: string }> {
   const client = getSupabaseClient();
 
-  // Lokal/demo: jangan bergantung pada ID React; cari periode AKTIF langsung.
+  // Lokal/demo: cari periode AKTIF dari data yang tersimpan, bukan dari ID
+  // yang mungkin sudah tidak cocok dengan state React.
   if (!client) {
     const items = getLocalPeriodePembukuan();
-    const idx = items.findIndex(x =>
-      x.status === 'AKTIF' && (!id || x.id === id)
-    );
-    if (idx < 0) return { success: false, message: 'Periode aktif tidak ditemukan.' };
+    const idx = items.findIndex(x => x.status === 'AKTIF');
+
+    if (idx < 0) {
+      const created: PeriodePembukuan = {
+        id: `PER-${Date.now()}`,
+        namaPeriode: tahunAjaran,
+        tahunAjaran,
+        tanggalMulai,
+        tanggalAkhir: null,
+        saldoAwal,
+        saldoAkhir: null,
+        status: 'AKTIF',
+        createdAt: new Date().toISOString()
+      };
+      saveLocal([created, ...items]);
+      return { success: true };
+    }
 
     items[idx] = {
       ...items[idx],
@@ -99,31 +113,48 @@ export async function updatePeriodeAktifSettings(
     return { success: true };
   }
 
-  // Produksi: selalu verifikasi periode AKTIF langsung dari database.
-  // Ini mencegah state React yang stale/kosong menyebabkan "periode tidak ditemukan".
-  let targetId = id;
+  // Produksi: JANGAN memakai ID dari React state sebagai sumber kebenaran.
+  // Selalu ambil ID periode AKTIF terbaru langsung dari Supabase.
+  // Ini memperbaiki kasus ketika state menyimpan ID periode lama/stale.
+  const { data: active, error: readError } = await client
+    .from('periode_pembukuan')
+    .select('id')
+    .eq('status', 'AKTIF')
+    .order('tanggal_mulai', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  if (!targetId) {
-    const { data: active, error: readError } = await client
+  if (readError) {
+    return { success: false, message: `Gagal membaca periode aktif: ${readError.message}` };
+  }
+
+  // Jika belum ada periode AKTIF, buat periode pertama.
+  if (!active?.id) {
+    const { data: inserted, error: insertError } = await client
       .from('periode_pembukuan')
+      .insert({
+        nama_periode: tahunAjaran,
+        tahun_ajaran: tahunAjaran,
+        tanggal_mulai: tanggalMulai,
+        tanggal_akhir: null,
+        saldo_awal: saldoAwal,
+        saldo_akhir: null,
+        status: 'AKTIF'
+      })
       .select('id')
-      .eq('status', 'AKTIF')
-      .order('tanggal_mulai', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .single();
 
-    if (readError) {
-      return { success: false, message: `Gagal membaca periode aktif: ${readError.message}` };
+    if (insertError) {
+      return { success: false, message: `Gagal membuat periode aktif baru: ${insertError.message}` };
     }
-
-    targetId = active?.id ?? null;
+    if (!inserted?.id) {
+      return { success: false, message: 'Periode aktif gagal dibuat di database.' };
+    }
+    return { success: true };
   }
 
-  if (!targetId) {
-    return { success: false, message: 'Periode aktif tidak ditemukan di database.' };
-  }
-
-  const { data: updated, error } = await client
+  // Update berdasarkan ID yang baru saja dibaca dari database.
+  const { data: updated, error: updateError } = await client
     .from('periode_pembukuan')
     .update({
       nama_periode: tahunAjaran,
@@ -131,14 +162,20 @@ export async function updatePeriodeAktifSettings(
       tanggal_mulai: tanggalMulai,
       saldo_awal: saldoAwal
     })
-    .eq('id', targetId)
+    .eq('id', active.id)
     .eq('status', 'AKTIF')
     .select('id')
     .maybeSingle();
 
-  if (error) return { success: false, message: error.message };
-  if (!updated) {
-    return { success: false, message: 'Periode aktif tidak ditemukan atau tidak dapat diperbarui.' };
+  if (updateError) {
+    return { success: false, message: `Gagal memperbarui periode aktif: ${updateError.message}` };
+  }
+
+  if (!updated?.id) {
+    return {
+      success: false,
+      message: 'Periode aktif tidak ditemukan atau tidak dapat diperbarui. Silakan muat ulang halaman lalu coba lagi.'
+    };
   }
 
   return { success: true };
