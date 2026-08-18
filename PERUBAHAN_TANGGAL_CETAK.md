@@ -1,0 +1,1 @@
+Perubahan hanya pada tanggal blok tanda tangan laporan: sekarang otomatis menggunakan tanggal saat dokumen dicetak dalam format Indonesia (contoh: Cianjur, 17 Agustus 2026). Tidak mengubah reportMonth, transaksi, perhitungan, atau UI lain.
