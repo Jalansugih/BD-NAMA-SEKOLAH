@@ -86,24 +86,7 @@ export async function updatePeriodeAktifSettings(
     const idx = items.findIndex(x =>
       x.status === 'AKTIF' && (!id || x.id === id)
     );
-
-    // Belum ada periode AKTIF sama sekali (mis. pertama kali dipakai) -> buat baru,
-    // jangan gagal dengan pesan "tidak ditemukan".
-    if (idx < 0) {
-      const created: PeriodePembukuan = {
-        id: `PER-${Date.now()}`,
-        namaPeriode: tahunAjaran,
-        tahunAjaran,
-        tanggalMulai,
-        tanggalAkhir: null,
-        saldoAwal,
-        saldoAkhir: null,
-        status: 'AKTIF',
-        createdAt: new Date().toISOString()
-      };
-      saveLocal([created, ...items]);
-      return { success: true };
-    }
+    if (idx < 0) return { success: false, message: 'Periode aktif tidak ditemukan.' };
 
     items[idx] = {
       ...items[idx],
@@ -136,29 +119,8 @@ export async function updatePeriodeAktifSettings(
     targetId = active?.id ?? null;
   }
 
-  // Belum ada baris periode_pembukuan sama sekali di database (mis. baru selesai
-  // migrasi / pertama kali mengisi Saldo Awal) -> buat periode AKTIF baru,
-  // jangan gagal dengan pesan "periode aktif tidak ditemukan".
   if (!targetId) {
-    const { data: inserted, error: insertError } = await client
-      .from('periode_pembukuan')
-      .insert({
-        nama_periode: tahunAjaran,
-        tahun_ajaran: tahunAjaran,
-        tanggal_mulai: tanggalMulai,
-        saldo_awal: saldoAwal,
-        status: 'AKTIF'
-      })
-      .select('id')
-      .maybeSingle();
-
-    if (insertError) {
-      return { success: false, message: `Gagal membuat periode aktif baru: ${insertError.message}` };
-    }
-    if (!inserted) {
-      return { success: false, message: 'Periode aktif gagal dibuat di database.' };
-    }
-    return { success: true };
+    return { success: false, message: 'Periode aktif tidak ditemukan di database.' };
   }
 
   const { data: updated, error } = await client
