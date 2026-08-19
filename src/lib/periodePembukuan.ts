@@ -13,7 +13,8 @@ const mapRow = (row: any): PeriodePembukuan => ({
   saldoAkhir: row.saldo_akhir == null ? null : Number(row.saldo_akhir),
   status: row.status,
   createdAt: row.created_at,
-  closedAt: row.closed_at || undefined
+  closedAt: row.closed_at || undefined,
+  periodeSebelumnyaId: row.periode_sebelumnya_id ?? null,
 });
 
 export function getLocalPeriodePembukuan(): PeriodePembukuan[] {
