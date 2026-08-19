@@ -39,7 +39,7 @@ import {
 
 import { fetchAuditLogsFromSupabase } from './lib/audit';
 import {
-  fetchPeriodePembukuan, getActivePeriode, closePeriodePembukuan,
+  fetchPeriodePembukuan, getActivePeriode, closePeriodePembukuan, reopenPeriodePembukuan,
   updateSaldoAwalPeriode, updateTahunAjaranAktif, updatePeriodeAktifSettings, defaultTanggalMulaiTahunAjaran, defaultTanggalAkhirTahunAjaran
 } from './lib/periodePembukuan';
 
@@ -80,6 +80,7 @@ export default function App() {
   const [siswaTagihanList, setSiswaTagihanList] = useState<SiswaTagihan[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [periodePembukuanList, setPeriodePembukuanList] = useState<PeriodePembukuan[]>([]);
+  const [periodeTerakhirDitutupId, setPeriodeTerakhirDitutupId] = useState<string | null>(null);
 
   // Auth & Supabase Status
   const [userSession, setUserSession] = useState<UserSession | null>(null);
@@ -243,6 +244,7 @@ export default function App() {
 
     const periods = await fetchPeriodePembukuan();
     setPeriodePembukuanList(periods);
+    setPeriodeTerakhirDitutupId(active.id);
     const next = getActivePeriode(periods);
     if (next) {
       setKonfigurasi(prev => ({ ...prev, saldoAwal: next.saldoAwal, tahunAjaran: next.tahunAjaran }));
@@ -253,6 +255,88 @@ export default function App() {
     await refreshAuditLogs();
 
     showToast(`Tutup Buku berhasil. Saldo akhir ${formatRupiah(res.data?.saldoAkhir || 0)} menjadi saldo awal ${next?.tahunAjaran || 'periode berikutnya'}.`);
+  };
+
+
+  const handleBukaBukuKembali = async () => {
+    // Gunakan ID periode yang baru saja ditutup. Jika state belum punya ID
+    // (misalnya setelah refresh), cari periode DITUTUP terbaru dari database.
+    let periodeId = periodeTerakhirDitutupId;
+
+    if (!periodeId) {
+      const periods = await fetchPeriodePembukuan();
+      const latestClosed = periods
+        .filter(p => p.status === 'DITUTUP')
+        .sort(
+          (a, b) =>
+            new Date(b.tanggalAkhir || b.tanggalMulai).getTime() -
+            new Date(a.tanggalAkhir || a.tanggalMulai).getTime()
+        )[0];
+
+      periodeId = latestClosed?.id ?? null;
+
+      if (periods.length > 0) {
+        setPeriodePembukuanList(periods);
+      }
+    }
+
+    if (!periodeId) {
+      showToast('Tidak ditemukan periode yang dapat dibuka kembali.');
+      return;
+    }
+
+    const periodeDitutup = periodePembukuanList.find(p => p.id === periodeId);
+
+    if (
+      periodeDitutup &&
+      periodeDitutup.status !== 'DITUTUP'
+    ) {
+      showToast('Periode yang dipilih bukan periode tertutup.');
+      return;
+    }
+
+    const namaPeriode = periodeDitutup?.namaPeriode || 'periode terakhir';
+
+    if (
+      !confirm(
+        `Buka kembali ${namaPeriode}?\n\n` +
+        'Periode akan kembali menjadi aktif. Pastikan Anda memahami dampaknya terhadap transaksi dan laporan.'
+      )
+    ) {
+      return;
+    }
+
+    const res = await reopenPeriodePembukuan(periodeId);
+
+    if (!res.success) {
+      showToast(`Buka Buku Kembali gagal: ${res.message}`);
+      return;
+    }
+
+    // Selalu ambil ulang dari database/local store agar UI mengikuti
+    // keadaan sebenarnya, bukan sekadar mengubah state secara optimistis.
+    const periods = await fetchPeriodePembukuan();
+    setPeriodePembukuanList(periods);
+
+    const active = getActivePeriode(periods);
+
+    if (active) {
+      setKonfigurasi(prev => ({
+        ...prev,
+        saldoAwal: active.saldoAwal,
+        tahunAjaran: active.tahunAjaran
+      }));
+    }
+
+    // Setelah berhasil dibuka kembali, tombol kembali menjadi Tutup Buku.
+    setPeriodeTerakhirDitutupId(null);
+
+    await refreshPemasukan();
+    await refreshPengeluaran();
+    await refreshSiswaTagihan();
+    await refreshAuditLogs();
+
+    showToast(`Buku ${namaPeriode} berhasil dibuka kembali.`);
   };
 
   // Sync / Test Supabase on mount
@@ -314,7 +398,18 @@ export default function App() {
       setPengeluaranList(outData ?? []);
       setSiswaTagihanList(stData ?? []);
       setAuditLogs(logs ?? []);
-      setPeriodePembukuanList(periods ?? []);
+      const loadedPeriods = periods ?? [];
+      setPeriodePembukuanList(loadedPeriods);
+
+      const latestClosed = loadedPeriods
+        .filter(p => p.status === 'DITUTUP')
+        .sort(
+          (a, b) =>
+            new Date(b.tanggalAkhir || b.tanggalMulai).getTime() -
+            new Date(a.tanggalAkhir || a.tanggalMulai).getTime()
+        )[0];
+
+      setPeriodeTerakhirDitutupId(latestClosed?.id ?? null);
     } else {
       // Mode Demo Lokal: tidak ada Supabase terhubung -> data initial hanya
       // dipakai DI SINI, khusus untuk demo (poin 4 panduan), tidak pernah
@@ -359,16 +454,19 @@ export default function App() {
   };
 
   const refreshPemasukan = async () => {
+    if (!isConnectedToSupabase) return;
     const data = await fetchPemasukanFromSupabase();
     if (data) setPemasukanList(data);
   };
 
   const refreshPengeluaran = async () => {
+    if (!isConnectedToSupabase) return;
     const data = await fetchPengeluaranFromSupabase();
     if (data) setPengeluaranList(data);
   };
 
   const refreshSiswaTagihan = async () => {
+    if (!isConnectedToSupabase) return;
     const data = await fetchSiswaTagihan();
     if (data) setSiswaTagihanList(data);
   };
@@ -1026,6 +1124,8 @@ export default function App() {
               onUpdateTahunAjaran={handleUpdateTahunAjaran}
               onSavePeriodeSettings={handleSavePeriodeSettings}
               onTutupBuku={handleTutupBuku}
+              onBukaBukuKembali={handleBukaBukuKembali}
+              adaPeriodeUntukDibukaKembali={Boolean(periodeTerakhirDitutupId)}
               showToast={showToast}
             />
           )}
@@ -1037,9 +1137,12 @@ export default function App() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         userSession={userSession}
-        onLoginSuccess={(session) => setUserSession(session)}
+        onLoginSuccess={(session) => {
+          setUserSession(session);
+          setIsAuthModalOpen(false);
+          void checkAndSyncSupabase();
+        }}
         showToast={showToast}
-        isDemoMode={!isConnectedToSupabase}
       />
 
       <SupabaseConfigModal

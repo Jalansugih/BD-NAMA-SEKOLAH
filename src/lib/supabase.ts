@@ -3,119 +3,464 @@ import { createClient, SupabaseClient, Session } from '@supabase/supabase-js';
 const STORAGE_KEY_URL = 'rajasch_supabase_url';
 const STORAGE_KEY_KEY = 'rajasch_supabase_anon_key';
 
-// PRIORITAS KREDENSIAL: environment variable (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)
-// yang diset di server deploy (Vercel/Netlify/dst) SELALU didahulukan. localStorage hanya
-// dipakai sebagai jalan pintas saat development lokal lewat modal "Pengaturan Supabase".
-// (Poin 24 panduan: localStorage HANYA untuk preferensi ini, bukan untuk saldo/transaksi/
-// pembayaran/profil lembaga/tagihan/master data -- semua itu sekarang ada di file terpisah
-// yang membaca & menulis langsung ke Supabase.)
-export function getSavedSupabaseCredentials(): { url: string; key: string } {
-  const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
-  const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+/**
+ * Mengambil kredensial Supabase.
+ *
+ * Prioritas:
+ * 1. Environment variable VITE_SUPABASE_URL
+ * 2. Environment variable VITE_SUPABASE_ANON_KEY
+ * 3. localStorage (khusus development / konfigurasi lokal)
+ *
+ * Tidak ada credential dummy/fallback palsu.
+ */
+export function getSavedSupabaseCredentials(): {
+  url: string;
+  key: string;
+} {
+  const envUrl =
+    (import.meta as any).env?.VITE_SUPABASE_URL?.trim() || '';
 
-  const localUrl = envUrl || localStorage.getItem(STORAGE_KEY_URL) || '';
-  const localKey = envKey || localStorage.getItem(STORAGE_KEY_KEY) || '';
+  const envKey =
+    (import.meta as any).env?.VITE_SUPABASE_ANON_KEY?.trim() || '';
 
-  const finalUrl = localUrl || 'https://xyzcompany.supabase.co';
-  const finalKey = localKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key_for_demo';
+  const storedUrl =
+    typeof window !== 'undefined'
+      ? localStorage.getItem(STORAGE_KEY_URL)?.trim() || ''
+      : '';
 
-  return { url: finalUrl, key: finalKey };
+  const storedKey =
+    typeof window !== 'undefined'
+      ? localStorage.getItem(STORAGE_KEY_KEY)?.trim() || ''
+      : '';
+
+  return {
+    url: envUrl || storedUrl,
+    key: envKey || storedKey,
+  };
 }
 
+/**
+ * Singleton Supabase client.
+ */
 let supabaseInstance: SupabaseClient | null = null;
 
+/**
+ * Membuat / mengambil Supabase client.
+ */
 export function getSupabaseClient(): SupabaseClient | null {
   const { url, key } = getSavedSupabaseCredentials();
-  if (!url || !key || url.includes('xyzcompany.supabase.co')) {
+
+  if (!url || !key) {
     return null;
   }
+
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(url)) {
+    console.warn('[Supabase] URL tidak valid:', url);
+    return null;
+  }
+
   if (!supabaseInstance) {
     try {
       supabaseInstance = createClient(url, key);
     } catch (err) {
-      console.warn('Failed to initialize Supabase client:', err);
-      return null;
+      console.error(
+        '[Supabase] Gagal membuat client:',
+        err
+      );
+
+      supabaseInstance = null;
     }
   }
+
   return supabaseInstance;
 }
 
-export function resetSupabaseClient(url: string, key: string) {
-  localStorage.setItem(STORAGE_KEY_URL, url);
-  localStorage.setItem(STORAGE_KEY_KEY, key);
-  if (url && key) {
+/**
+ * Menyimpan konfigurasi Supabase dari menu konfigurasi lokal.
+ *
+ * Catatan:
+ * Environment variable tetap menjadi prioritas.
+ */
+export function resetSupabaseClient(
+  url: string,
+  key: string
+): void {
+  const cleanUrl = url.trim();
+  const cleanKey = key.trim();
+
+  if (cleanUrl && cleanKey) {
+    localStorage.setItem(STORAGE_KEY_URL, cleanUrl);
+    localStorage.setItem(STORAGE_KEY_KEY, cleanKey);
+
     try {
-      supabaseInstance = createClient(url, key);
+      supabaseInstance = createClient(
+        cleanUrl,
+        cleanKey
+      );
     } catch (err) {
+      console.error(
+        '[Supabase] Gagal membuat client baru:',
+        err
+      );
+
       supabaseInstance = null;
     }
-  } else {
-    supabaseInstance = null;
+
+    return;
   }
+
+  localStorage.removeItem(STORAGE_KEY_URL);
+  localStorage.removeItem(STORAGE_KEY_KEY);
+
+  supabaseInstance = null;
 }
 
-export async function testSupabaseConnection(urlInput?: string, keyInput?: string): Promise<{ success: boolean; message: string }> {
-  const creds = getSavedSupabaseCredentials();
-  const url = urlInput || creds.url;
-  const key = keyInput || creds.key;
+/**
+ * Menguji koneksi Supabase sekaligus memastikan
+ * tabel utama aplikasi dapat diakses.
+ */
+export async function testSupabaseConnection(
+  urlInput?: string,
+  keyInput?: string
+): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  const saved = getSavedSupabaseCredentials();
 
-  if (!url || !key || url.includes('xyzcompany')) {
-    return { success: false, message: 'Kredensial Supabase belum diatur. Sediakan URL & Anon Key valid.' };
+  const url = urlInput?.trim() || saved.url;
+  const key = keyInput?.trim() || saved.key;
+
+  if (!url || !key) {
+    return {
+      success: false,
+      message:
+        'Kredensial Supabase belum diatur. Sediakan URL dan Anon Key yang valid.',
+    };
+  }
+
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(url)) {
+    return {
+      success: false,
+      message:
+        'URL Supabase tidak valid. Pastikan menggunakan URL project Supabase yang benar.',
+    };
   }
 
   try {
     const testClient = createClient(url, key);
-    const { error } = await testClient.from('konfigurasi_lembaga').select('id').limit(1);
+
+    const { error } = await testClient
+      .from('konfigurasi_lembaga')
+      .select('id')
+      .limit(1);
+
     if (error) {
-      if (error.code === 'PGRST116' || error.message.includes('relation') && error.message.includes('does not exist')) {
-        return { success: false, message: 'Koneksi Berhasil, tetapi skema tabel belum dibuat! Silakan jalankan SQL Script Migration (supabase/migration.sql).' };
+      const relationMissing =
+        error.code === '42P01' ||
+        error.message
+          ?.toLowerCase()
+          .includes('relation') &&
+        error.message
+          ?.toLowerCase()
+          .includes('does not exist');
+
+      if (relationMissing) {
+        return {
+          success: false,
+          message:
+            'Koneksi Supabase berhasil, tetapi tabel konfigurasi_lembaga belum tersedia.',
+        };
       }
-      return { success: false, message: `Error Supabase: ${error.message}` };
+
+      return {
+        success: false,
+        message: `Supabase terhubung tetapi akses database gagal: ${error.message}`,
+      };
     }
-    return { success: true, message: 'Koneksi Supabase Aktif & Terverifikasi!' };
+
+    return {
+      success: true,
+      message:
+        'Koneksi Supabase aktif dan database dapat diakses.',
+    };
   } catch (err: any) {
-    return { success: false, message: `Gagal terkoneksi: ${err.message || 'Error jaringan'}` };
+    console.error(
+      '[Supabase] Connection test error:',
+      err
+    );
+
+    return {
+      success: false,
+      message:
+        err?.message ||
+        'Gagal terhubung ke Supabase. Periksa koneksi internet dan konfigurasi.',
+    };
   }
 }
 
-// =========================================================================
-// AUTH SESSION HELPERS
-// =========================================================================
+// ============================================================================
+// AUTH SESSION
+// ============================================================================
 
-/** Ambil sesi login saat ini dari Supabase (null jika belum login / belum terhubung). */
+/**
+ * Mengambil session Supabase yang sedang aktif.
+ */
 export async function getCurrentSession(): Promise<Session | null> {
   const client = getSupabaseClient();
-  if (!client) return null;
-  const { data, error } = await client.auth.getSession();
-  if (error) return null;
-  return data.session;
-}
 
-/** Daftarkan listener perubahan status login (login/logout/token refresh). */
-export function onAuthStateChange(callback: (session: Session | null) => void) {
-  const client = getSupabaseClient();
-  if (!client) return () => {};
-  const { data } = client.auth.onAuthStateChange((_event, session) => {
-    callback(session);
-  });
-  return () => data.subscription.unsubscribe();
-}
-
-/** Login dengan email & password. TIDAK ada fallback sesi palsu -- jika gagal, gagal. */
-export async function signInWithPassword(email: string, password: string): Promise<{ success: boolean; session?: Session; message?: string }> {
-  const client = getSupabaseClient();
   if (!client) {
-    return { success: false, message: 'Supabase belum dikonfigurasi. Hubungi admin untuk mengatur koneksi database.' };
+    return null;
   }
-  const { data, error } = await client.auth.signInWithPassword({ email, password });
-  if (error || !data.session) {
-    return { success: false, message: error?.message || 'Email atau kata sandi salah.' };
+
+  try {
+    const { data, error } =
+      await client.auth.getSession();
+
+    if (error) {
+      console.error(
+        '[Auth] Gagal mengambil session:',
+        error
+      );
+
+      return null;
+    }
+
+    return data.session;
+  } catch (err) {
+    console.error(
+      '[Auth] getCurrentSession error:',
+      err
+    );
+
+    return null;
   }
-  return { success: true, session: data.session };
 }
 
-export async function signOutSupabase(): Promise<void> {
+/**
+ * Listener perubahan autentikasi:
+ *
+ * - SIGNED_IN
+ * - SIGNED_OUT
+ * - TOKEN_REFRESHED
+ * - USER_UPDATED
+ * - dll.
+ */
+export function onAuthStateChange(
+  callback: (session: Session | null) => void
+): () => void {
   const client = getSupabaseClient();
-  if (!client) return;
-  await client.auth.signOut();
+
+  if (!client) {
+    return () => {};
+  }
+
+  const {
+    data: { subscription },
+  } = client.auth.onAuthStateChange(
+    (_event, session) => {
+      callback(session);
+    }
+  );
+
+  return () => {
+    subscription.unsubscribe();
+  };
+}
+
+/**
+ * Login menggunakan email + password.
+ *
+ * Tidak ada fallback login lokal.
+ */
+export async function signInWithPassword(
+  email: string,
+  password: string
+): Promise<{
+  success: boolean;
+  session?: Session;
+  message?: string;
+}> {
+  const client = getSupabaseClient();
+
+  if (!client) {
+    return {
+      success: false,
+      message:
+        'Supabase belum dikonfigurasi. Silakan hubungi administrator.',
+    };
+  }
+
+  try {
+    const cleanEmail = email.trim();
+
+    const { data, error } =
+      await client.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+
+    if (error) {
+      console.error(
+        '[Auth] Login gagal:',
+        error
+      );
+
+      return {
+        success: false,
+        message:
+          'Email atau kata sandi tidak benar.',
+      };
+    }
+
+    if (!data.session) {
+      return {
+        success: false,
+        message:
+          'Login tidak menghasilkan session yang valid.',
+      };
+    }
+
+    return {
+      success: true,
+      session: data.session,
+    };
+  } catch (err) {
+    console.error(
+      '[Auth] signInWithPassword error:',
+      err
+    );
+
+    return {
+      success: false,
+      message:
+        'Terjadi kesalahan saat proses login.',
+    };
+  }
+}
+
+/**
+ * Reset / logout session.
+ */
+export async function signOutSupabase(): Promise<{
+  success: boolean;
+  message?: string;
+}> {
+  const client = getSupabaseClient();
+
+  if (!client) {
+    return {
+      success: false,
+      message:
+        'Supabase belum dikonfigurasi.',
+    };
+  }
+
+  try {
+    const { error } =
+      await client.auth.signOut();
+
+    if (error) {
+      console.error(
+        '[Auth] Logout gagal:',
+        error
+      );
+
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+
+    return {
+      success: true,
+    };
+  } catch (err: any) {
+    console.error(
+      '[Auth] signOut error:',
+      err
+    );
+
+    return {
+      success: false,
+      message:
+        err?.message ||
+        'Gagal melakukan logout.',
+    };
+  }
+}
+
+/**
+ * Mengirim email reset password melalui Supabase Auth.
+ */
+export async function resetPasswordForEmail(
+  email: string,
+  redirectTo?: string
+): Promise<{
+  success: boolean;
+  message?: string;
+}> {
+  const client = getSupabaseClient();
+
+  if (!client) {
+    return {
+      success: false,
+      message:
+        'Supabase belum dikonfigurasi.',
+    };
+  }
+
+  const cleanEmail = email.trim();
+
+  if (!cleanEmail) {
+    return {
+      success: false,
+      message:
+        'Email wajib diisi.',
+    };
+  }
+
+  try {
+    const redirectUrl =
+      redirectTo ||
+      `${window.location.origin}/reset-password`;
+
+    const { error } =
+      await client.auth.resetPasswordForEmail(
+        cleanEmail,
+        {
+          redirectTo: redirectUrl,
+        }
+      );
+
+    if (error) {
+      console.error(
+        '[Auth] Reset password gagal:',
+        error
+      );
+
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+
+    return {
+      success: true,
+      message:
+        'Email reset kata sandi telah dikirim. Silakan periksa email Anda.',
+    };
+  } catch (err: any) {
+    console.error(
+      '[Auth] resetPasswordForEmail error:',
+      err
+    );
+
+    return {
+      success: false,
+      message:
+        err?.message ||
+        'Gagal mengirim email reset kata sandi.',
+    };
+  }
 }

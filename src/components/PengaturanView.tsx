@@ -35,6 +35,8 @@ interface PengaturanViewProps {
   onUpdateTahunAjaran: (tahun: string) => void;
   onSavePeriodeSettings: (tahun: string, tanggalMulai: string, nominal: number) => void;
   onTutupBuku: () => void;
+  onBukaBukuKembali: () => void;
+  adaPeriodeUntukDibukaKembali: boolean;
   showToast: (msg: string) => void;
 }
 
@@ -106,6 +108,8 @@ export const PengaturanView: React.FC<PengaturanViewProps> = ({
   onUpdateTahunAjaran,
   onSavePeriodeSettings,
   onTutupBuku,
+  onBukaBukuKembali,
+  adaPeriodeUntukDibukaKembali,
   showToast
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'master' | 'audit'>('master');
@@ -384,10 +388,12 @@ export const PengaturanView: React.FC<PengaturanViewProps> = ({
                     <div className="w-8 h-8 rounded-[10px] bg-rose-100 text-rose-600 flex items-center justify-center ring-1 ring-rose-200/70">
                       <RotateCcw className="w-4 h-4" />
                     </div>
-                    <h4 className="text-xs font-bold text-rose-900">Tutup Buku (Cut-Off)</h4>
+                    <h4 className="text-xs font-bold text-rose-900">{adaPeriodeUntukDibukaKembali ? 'Buka Buku Kembali' : 'Tutup Buku (Cut-Off)'}</h4>
                   </div>
                   <p className="text-[11px] text-rose-700/80 mt-1 leading-relaxed">
-                    Mengunci transaksi periode lama tanpa menghapus data. Saldo akhir dihitung otomatis dari database dan menjadi saldo awal periode berikutnya.
+                    {adaPeriodeUntukDibukaKembali
+                      ? 'Membuka kembali periode terakhir yang ditutup agar dapat digunakan dan diperbaiki kembali.'
+                      : 'Mengunci transaksi periode lama tanpa menghapus data. Saldo akhir dihitung otomatis dari database dan menjadi saldo awal periode berikutnya.'}
                   </p>
                   <div className="mt-3 p-3 bg-white/70 border border-rose-100 rounded-[12px] flex items-center justify-between gap-2">
                     <div className="min-w-0">
@@ -406,14 +412,26 @@ export const PengaturanView: React.FC<PengaturanViewProps> = ({
                     </span>
                   </div>
                 </div>
-                <button
-                  onClick={onTutupBuku}
-                  disabled={periodeAktifStatus !== 'AKTIF'}
-                  className="w-full mt-4 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-[12px] text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-rose-600/20 active:scale-[0.99]"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Tutup Buku</span>
-                </button>
+                {adaPeriodeUntukDibukaKembali ? (
+                  <button
+                    type="button"
+                    onClick={onBukaBukuKembali}
+                    className="w-full mt-4 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[12px] text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-600/20 active:scale-[0.99]"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Buka Buku Kembali</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onTutupBuku}
+                    disabled={periodeAktifStatus !== 'AKTIF'}
+                    className="w-full mt-4 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-[12px] text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-rose-600/20 active:scale-[0.99]"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Tutup Buku</span>
+                  </button>
+                )}
               </PremiumCard>
             </div>
           </div>

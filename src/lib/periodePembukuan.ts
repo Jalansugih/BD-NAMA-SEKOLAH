@@ -267,7 +267,7 @@ export async function reopenPeriodePembukuan(id: string): Promise<{ success: boo
     return { success: true };
   }
 
-  const { error } = await client.rpc('buka_kembali_periode', { p_periode_id: id });
+  const { error } = await client.rpc('buka_kembali_buku', { p_periode_id: id });
   if (error) return { success: false, message: error.message };
   return { success: true };
 }
