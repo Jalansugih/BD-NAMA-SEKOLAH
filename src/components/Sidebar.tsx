@@ -200,7 +200,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             <div className="truncate">
               <p className="text-xs font-semibold text-slate-900 truncate">
-                Rizki Mulyana S.Pd
+                Anas Abdul Latif, S.Pd
               </p>
 
               <p className="text-[10px] text-slate-500 truncate">

@@ -316,17 +316,17 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
                 <p className="text-slate-600">Mengetahui,</p>
                 <p className="font-bold text-slate-900 mb-16">Kepala Sekolah {currentLembaga}</p>
                 <p className="font-bold text-slate-900 underline">H. Fahru Rozi Ramdhan S.S., M.Pd</p>
-                <p className="text-[10px] text-slate-500">NIP. .........................................</p>
+                <p className="text-[10px] text-slate-500">NIP. ...............................................</p>
               </div>
               <div>
                 <p className="text-slate-600">Cianjur, {printDate}</p>
                 <p className="font-bold text-slate-900 mb-16">Bendahara Sekolah</p>
                 <p className="font-bold text-slate-900 underline">Rizki Mulyana, S.Pd</p>
-                <p className="text-[10px] text-slate-500">NIP. .........................................</p>
+                <p className="text-[10px] text-slate-500">NIP. ...............................................</p>
               </div>
             </div>
             <div className="mt-8 text-[9px] text-slate-400 text-center border-t border-slate-100 pt-2 font-mono">
-              Dokumen ini dicetak secara otomatis dari Portal Bendahara SMP Tungturunan • Yang Terintegrasi
+              Dokumen ini dicetak secara otomatis dari Portal Rajakas.iD • Yang Terintegrasi
             </div>
           </div>
         </div>
