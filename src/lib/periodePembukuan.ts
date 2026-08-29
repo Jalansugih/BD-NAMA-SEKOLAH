@@ -13,8 +13,7 @@ const mapRow = (row: any): PeriodePembukuan => ({
   saldoAkhir: row.saldo_akhir == null ? null : Number(row.saldo_akhir),
   status: row.status,
   createdAt: row.created_at,
-  closedAt: row.closed_at || undefined,
-  periodeSebelumnyaId: row.periode_sebelumnya_id ?? null,
+  closedAt: row.closed_at || undefined
 });
 
 export function getLocalPeriodePembukuan(): PeriodePembukuan[] {
@@ -74,34 +73,20 @@ export async function updateTahunAjaranAktif(tahunAjaran: string): Promise<{ suc
 }
 
 export async function updatePeriodeAktifSettings(
-  _id: string | null,
+  id: string | null,
   tahunAjaran: string,
   tanggalMulai: string,
   saldoAwal: number
 ): Promise<{ success: boolean; message?: string }> {
   const client = getSupabaseClient();
 
-  // Lokal/demo: cari periode AKTIF dari data yang tersimpan, bukan dari ID
-  // yang mungkin sudah tidak cocok dengan state React.
+  // Lokal/demo: jangan bergantung pada ID React; cari periode AKTIF langsung.
   if (!client) {
     const items = getLocalPeriodePembukuan();
-    const idx = items.findIndex(x => x.status === 'AKTIF');
-
-    if (idx < 0) {
-      const created: PeriodePembukuan = {
-        id: `PER-${Date.now()}`,
-        namaPeriode: tahunAjaran,
-        tahunAjaran,
-        tanggalMulai,
-        tanggalAkhir: null,
-        saldoAwal,
-        saldoAkhir: null,
-        status: 'AKTIF',
-        createdAt: new Date().toISOString()
-      };
-      saveLocal([created, ...items]);
-      return { success: true };
-    }
+    const idx = items.findIndex(x =>
+      x.status === 'AKTIF' && (!id || x.id === id)
+    );
+    if (idx < 0) return { success: false, message: 'Periode aktif tidak ditemukan.' };
 
     items[idx] = {
       ...items[idx],
@@ -114,48 +99,31 @@ export async function updatePeriodeAktifSettings(
     return { success: true };
   }
 
-  // Produksi: JANGAN memakai ID dari React state sebagai sumber kebenaran.
-  // Selalu ambil ID periode AKTIF terbaru langsung dari Supabase.
-  // Ini memperbaiki kasus ketika state menyimpan ID periode lama/stale.
-  const { data: active, error: readError } = await client
-    .from('periode_pembukuan')
-    .select('id')
-    .eq('status', 'AKTIF')
-    .order('tanggal_mulai', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Produksi: selalu verifikasi periode AKTIF langsung dari database.
+  // Ini mencegah state React yang stale/kosong menyebabkan "periode tidak ditemukan".
+  let targetId = id;
 
-  if (readError) {
-    return { success: false, message: `Gagal membaca periode aktif: ${readError.message}` };
-  }
-
-  // Jika belum ada periode AKTIF, buat periode pertama.
-  if (!active?.id) {
-    const { data: inserted, error: insertError } = await client
+  if (!targetId) {
+    const { data: active, error: readError } = await client
       .from('periode_pembukuan')
-      .insert({
-        nama_periode: tahunAjaran,
-        tahun_ajaran: tahunAjaran,
-        tanggal_mulai: tanggalMulai,
-        tanggal_akhir: null,
-        saldo_awal: saldoAwal,
-        saldo_akhir: null,
-        status: 'AKTIF'
-      })
       .select('id')
-      .single();
+      .eq('status', 'AKTIF')
+      .order('tanggal_mulai', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (insertError) {
-      return { success: false, message: `Gagal membuat periode aktif baru: ${insertError.message}` };
+    if (readError) {
+      return { success: false, message: `Gagal membaca periode aktif: ${readError.message}` };
     }
-    if (!inserted?.id) {
-      return { success: false, message: 'Periode aktif gagal dibuat di database.' };
-    }
-    return { success: true };
+
+    targetId = active?.id ?? null;
   }
 
-  // Update berdasarkan ID yang baru saja dibaca dari database.
-  const { data: updated, error: updateError } = await client
+  if (!targetId) {
+    return { success: false, message: 'Periode aktif tidak ditemukan di database.' };
+  }
+
+  const { data: updated, error } = await client
     .from('periode_pembukuan')
     .update({
       nama_periode: tahunAjaran,
@@ -163,20 +131,14 @@ export async function updatePeriodeAktifSettings(
       tanggal_mulai: tanggalMulai,
       saldo_awal: saldoAwal
     })
-    .eq('id', active.id)
+    .eq('id', targetId)
     .eq('status', 'AKTIF')
     .select('id')
     .maybeSingle();
 
-  if (updateError) {
-    return { success: false, message: `Gagal memperbarui periode aktif: ${updateError.message}` };
-  }
-
-  if (!updated?.id) {
-    return {
-      success: false,
-      message: 'Periode aktif tidak ditemukan atau tidak dapat diperbarui. Silakan muat ulang halaman lalu coba lagi.'
-    };
+  if (error) return { success: false, message: error.message };
+  if (!updated) {
+    return { success: false, message: 'Periode aktif tidak ditemukan atau tidak dapat diperbarui.' };
   }
 
   return { success: true };
@@ -268,7 +230,7 @@ export async function reopenPeriodePembukuan(id: string): Promise<{ success: boo
     return { success: true };
   }
 
-  const { error } = await client.rpc('buka_kembali_buku', { p_periode_id: id });
+  const { error } = await client.rpc('buka_kembali_periode', { p_periode_id: id });
   if (error) return { success: false, message: error.message };
   return { success: true };
 }

@@ -98,23 +98,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    // MOBILE: p-0 -> nempel penuh ke tepi layar, tidak ada gap.
-    // DESKTOP (sm+): p-4 -> kembali jadi modal mengambang seperti semula.
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div
-        className="bg-white w-full h-full sm:h-auto sm:max-w-md
-                   rounded-none sm:rounded-[20px]
-                   border-0 sm:border sm:border-slate-200/80
-                   shadow-none sm:shadow-2xl
-                   overflow-y-auto overflow-x-hidden
-                   flex flex-col
+        className="bg-white rounded-[20px] max-w-md w-full shadow-2xl border border-slate-200/80 overflow-hidden
                    animate-in fade-in zoom-in-95 duration-200 motion-reduce:animate-none"
       >
         {/* Header brand */}
-        <div
-          className="relative px-6 pt-7 pb-6 bg-gradient-to-br from-blue-600 via-blue-600 to-blue-800 text-white overflow-hidden shrink-0"
-          style={{ paddingTop: 'max(1.75rem, env(safe-area-inset-top))' }}
-        >
+        <div className="relative px-6 pt-7 pb-6 bg-gradient-to-br from-blue-600 via-blue-600 to-blue-800 text-white overflow-hidden">
           {/* subtle decorative glow */}
           <div className="pointer-events-none absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
           <div className="pointer-events-none absolute -bottom-16 -left-10 w-48 h-48 rounded-full bg-white/5 blur-2xl" />
@@ -123,7 +113,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             onClick={onClose}
             aria-label="Tutup"
             className="absolute top-4 right-4 text-white/70 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
-            style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
           >
             <X className="w-4 h-4" />
           </button>
@@ -309,10 +298,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </a>
 
         {/* Footer */}
-        <div
-          className="px-6 pb-5 text-center shrink-0"
-          style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
-        >
+        <div className="px-6 pb-5 text-center">
           <p className="text-[10.5px] text-slate-400">© 2026 RajaKas.ID · Aplikasi Keuangan Digital</p>
         </div>
       </div>

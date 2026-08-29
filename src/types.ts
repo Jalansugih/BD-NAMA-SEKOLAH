@@ -76,9 +76,6 @@ export interface PeriodePembukuan {
   status: 'AKTIF' | 'DITUTUP';
   createdAt?: string;
   closedAt?: string;
-
-  // Relasi periode sebelumnya
-  periodeSebelumnyaId?: string | null;
 }
 
 export interface SupabaseConfig {

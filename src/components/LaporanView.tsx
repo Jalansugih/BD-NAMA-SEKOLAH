@@ -44,6 +44,13 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
   };
 
   const periodPrefix = getMonthPrefix(reportMonth);
+
+  // Setiap Jenis Laporan Administrasi punya "mode" tampilan & filter data yang berbeda.
+  const isBKU = selectedReportType === 'Buku Kas Umum (BKU)';
+  const isRekapPemasukan = selectedReportType === 'Rekapitulasi Pemasukan';
+  const isRekapPengeluaran = selectedReportType === 'Rekapitulasi Pengeluaran';
+  const isSaldoPosisi = selectedReportType === 'Saldo & Posisi Kas';
+  const isPertanggungjawaban = selectedReportType === 'Pertanggungjawaban Bulanan';
   const isStudentPaymentReport = selectedReportType === 'Infaq / Pembayaran Siswa';
 
   const getTransactionKelas = (tx: Pemasukan) => {
@@ -51,6 +58,10 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
     if (tx.sumber === 'Infak') return masterKelas.includes(tx.sub) ? tx.sub : '';
     return '';
   };
+
+  // Uang masuk yang benar-benar berasal dari menu Pembayaran Siswa (Infak per-siswa / SPP / dsb),
+  // bukan sekadar semua jenis pemasukan (BOS, Donasi, dsb).
+  const isSiswaPayment = (tx: Pemasukan) => !!tx.siswaId || tx.sumber === 'Pembayaran';
 
   // All transactions sorted chronologically for BKU
   const allTxSorted = [
@@ -79,18 +90,46 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
 
   const finalBalance = saldoAwalPeriode + totalIn - totalOut;
 
-  const laporanSiswaDalamPeriode = txDalamPeriode.filter(tx => {
-    if (tx.type !== 'IN' || !isStudentPaymentReport) return false;
-    const pemasukan = tx as Pemasukan;
-    const kelas = getTransactionKelas(pemasukan);
+  // Rekapitulasi Pemasukan: seluruh transaksi pemasukan pada periode (semua sumber dana).
+  const pemasukanDalamPeriode = txDalamPeriode.filter(tx => tx.type === 'IN') as Array<Pemasukan & { type: 'IN' }>;
+  // Rekapitulasi Pengeluaran: seluruh transaksi pengeluaran pada periode (semua kategori).
+  const pengeluaranDalamPeriode = txDalamPeriode.filter(tx => tx.type === 'OUT') as Array<Pengeluaran & { type: 'OUT' }>;
+
+  // Infaq / Pembayaran Siswa: hanya uang masuk dari menu Pembayaran Siswa, difilter per kelas.
+  const laporanSiswaDalamPeriode = pemasukanDalamPeriode.filter(tx => {
+    if (!isSiswaPayment(tx)) return false;
+    const kelas = getTransactionKelas(tx);
     return selectedKelas === 'Semua Kelas' || kelas === selectedKelas;
   });
 
-  const displayedTransactions = isStudentPaymentReport ? laporanSiswaDalamPeriode : txDalamPeriode;
+  const displayedTransactions = isStudentPaymentReport
+    ? laporanSiswaDalamPeriode
+    : isRekapPemasukan
+    ? pemasukanDalamPeriode
+    : isRekapPengeluaran
+    ? pengeluaranDalamPeriode
+    : isSaldoPosisi
+    ? [] // Saldo & Posisi Kas hanya menampilkan ringkasan, bukan daftar transaksi
+    : txDalamPeriode; // BKU, Pertanggungjawaban Bulanan, Lainnya
+
   const displayedTotalIn = isStudentPaymentReport
     ? laporanSiswaDalamPeriode.reduce((sum, tx) => sum + tx.nominal, 0)
-    : totalIn;
-  const displayedTotalOut = isStudentPaymentReport ? 0 : totalOut;
+    : isRekapPemasukan
+    ? pemasukanDalamPeriode.reduce((sum, tx) => sum + tx.nominal, 0)
+    : isRekapPengeluaran
+    ? 0
+    : totalIn; // BKU, Saldo & Posisi Kas, Pertanggungjawaban, Lainnya
+
+  const displayedTotalOut = isStudentPaymentReport || isRekapPemasukan
+    ? 0
+    : isRekapPengeluaran
+    ? pengeluaranDalamPeriode.reduce((sum, tx) => sum + tx.nominal, 0)
+    : totalOut; // BKU, Saldo & Posisi Kas, Pertanggungjawaban, Lainnya
+
+  // Baris "Saldo Kas Akhir Periode" hanya relevan untuk laporan yang mencampur arus masuk & keluar.
+  const showSaldoAkhir = isBKU || isPertanggungjawaban || isSaldoPosisi || selectedReportType === 'Lainnya';
+  // Kolom tabel: laporan rekap pemasukan/pengeluaran/siswa hanya butuh satu kolom nominal, bukan 2 kolom (masuk & keluar).
+  const showTwoColumnNominal = isBKU || isPertanggungjawaban || selectedReportType === 'Lainnya';
 
   // Export report to Excel / CSV format
   const handleExportExcel = () => {
@@ -114,7 +153,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
 
     csvContent += `\n;TOTAL PEMASUKAN;;;;${displayedTotalIn};;\n`;
     csvContent += `;TOTAL PENGELUARAN;;;;;${displayedTotalOut};\n`;
-    if (!isStudentPaymentReport) csvContent += `;SALDO AKHIR PERIODE;;;;;${finalBalance};\n`;
+    if (showSaldoAkhir) csvContent += `;SALDO AKHIR PERIODE;;;;;${finalBalance};\n`;
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -272,41 +311,94 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
               </p>
             </div>
 
-            {/* Report Table Body */}
-            <table className="w-full text-left border-collapse border border-slate-300 text-[11px] mb-8">
-              <thead>
-                <tr className="bg-slate-100 text-slate-800 font-bold">
-                  <th className="border border-slate-300 p-2 text-center w-8">No</th>
-                  <th className="border border-slate-300 p-2">Tanggal</th>
-                  <th className="border border-slate-300 p-2">No. Bukti</th>
-                  {isStudentPaymentReport ? (<><th className="border border-slate-300 p-2">Siswa</th><th className="border border-slate-300 p-2">Jenis Pembayaran</th><th className="border border-slate-300 p-2 text-right">Nominal (Rp)</th></>) : (<><th className="border border-slate-300 p-2">Keterangan</th><th className="border border-slate-300 p-2 text-right">Pemasukan (Rp)</th><th className="border border-slate-300 p-2 text-right">Pengeluaran (Rp)</th></>)}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {displayedTransactions.length === 0 ? (
-                  <tr><td colSpan={6} className="border border-slate-300 p-4 text-center text-slate-400 italic">{isStudentPaymentReport ? `Tidak ada data Infaq / Pembayaran Siswa untuk ${selectedKelas} pada periode ini.` : 'Tidak ada transaksi pada periode ini.'}</td></tr>
-                ) : (
-                  displayedTransactions.map((tx, idx) => {
-                    const pemasukan = tx.type === 'IN' ? tx as Pemasukan : null;
-                    const siswa = pemasukan?.siswaId ? siswaTagihanList.find(s => s.id === pemasukan.siswaId) : null;
-                    return (<tr key={tx.id}>
-                      <td className="border border-slate-300 p-2 text-center font-mono">{idx + 1}</td>
-                      <td className="border border-slate-300 p-2 font-mono">{tx.tanggal}</td>
-                      <td className="border border-slate-300 p-2 font-mono">{tx.noBukti || tx.id}</td>
-                      {isStudentPaymentReport ? (<><td className="border border-slate-300 p-2">{siswa?.nama || '—'}</td><td className="border border-slate-300 p-2">{siswa?.jenis || pemasukan?.sub || 'Infaq'}</td><td className="border border-slate-300 p-2 text-right font-mono">{formatRupiah(tx.nominal)}</td></>) : (<><td className="border border-slate-300 p-2">{tx.keterangan}</td><td className="border border-slate-300 p-2 text-right font-mono">{tx.type === 'IN' ? formatRupiah(tx.nominal) : '-'}</td><td className="border border-slate-300 p-2 text-right font-mono">{tx.type === 'OUT' ? formatRupiah(tx.nominal) : '-'}</td></>)}
-                    </tr>);
-                  })
-                )}
-              </tbody>
-              <tfoot>
-                <tr className="bg-slate-50 font-bold text-slate-900">
-                  <td colSpan={isStudentPaymentReport ? 5 : 4} className="border border-slate-300 p-2 text-right uppercase">{isStudentPaymentReport ? 'Total Pembayaran:' : 'Total Periode Ini:'}</td>
-                  <td className="border border-slate-300 p-2 text-right text-emerald-700">{formatRupiah(displayedTotalIn)}</td>
-                  {!isStudentPaymentReport && <td className="border border-slate-300 p-2 text-right text-rose-700">{formatRupiah(displayedTotalOut)}</td>}
-                </tr>
-                {!isStudentPaymentReport && (<tr className="bg-slate-100 font-bold text-slate-900"><td colSpan={4} className="border border-slate-300 p-2 text-right uppercase">Saldo Kas Akhir Periode:</td><td colSpan={2} className="border border-slate-300 p-2 text-center text-blue-700 font-mono text-xs">{formatRupiah(finalBalance)}</td></tr>)}
-              </tfoot>
-            </table>
+            {isSaldoPosisi ? (
+              /* SALDO & POSISI KAS: ringkasan saja, tanpa daftar transaksi per-baris */
+              <table className="w-full text-left border-collapse border border-slate-300 text-[11px] mb-8">
+                <tbody className="divide-y divide-slate-200">
+                  <tr>
+                    <td className="border border-slate-300 p-3 font-semibold w-2/3">Saldo Awal Periode ({reportMonth})</td>
+                    <td className="border border-slate-300 p-3 text-right font-mono">{formatRupiah(saldoAwalPeriode)}</td>
+                  </tr>
+                  <tr>
+                    <td className="border border-slate-300 p-3 font-semibold">Total Pemasukan Periode Ini</td>
+                    <td className="border border-slate-300 p-3 text-right font-mono text-emerald-700">{formatRupiah(totalIn)}</td>
+                  </tr>
+                  <tr>
+                    <td className="border border-slate-300 p-3 font-semibold">Total Pengeluaran Periode Ini</td>
+                    <td className="border border-slate-300 p-3 text-right font-mono text-rose-700">{formatRupiah(totalOut)}</td>
+                  </tr>
+                  <tr className="bg-slate-100">
+                    <td className="border border-slate-300 p-3 font-bold uppercase">Saldo &amp; Posisi Kas Akhir Periode</td>
+                    <td className="border border-slate-300 p-3 text-right font-mono font-bold text-blue-700 text-xs">{formatRupiah(finalBalance)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            ) : (
+              /* Report Table Body */
+              <table className="w-full text-left border-collapse border border-slate-300 text-[11px] mb-8">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-800 font-bold">
+                    <th className="border border-slate-300 p-2 text-center w-8">No</th>
+                    <th className="border border-slate-300 p-2">Tanggal</th>
+                    <th className="border border-slate-300 p-2">No. Bukti</th>
+                    {isStudentPaymentReport ? (
+                      <><th className="border border-slate-300 p-2">Siswa</th><th className="border border-slate-300 p-2">Jenis Pembayaran</th><th className="border border-slate-300 p-2 text-right">Nominal (Rp)</th></>
+                    ) : isRekapPemasukan ? (
+                      <><th className="border border-slate-300 p-2">Sumber Dana</th><th className="border border-slate-300 p-2">Keterangan</th><th className="border border-slate-300 p-2 text-right">Nominal (Rp)</th></>
+                    ) : isRekapPengeluaran ? (
+                      <><th className="border border-slate-300 p-2">Kategori</th><th className="border border-slate-300 p-2">Keterangan</th><th className="border border-slate-300 p-2 text-right">Nominal (Rp)</th></>
+                    ) : (
+                      <><th className="border border-slate-300 p-2">Keterangan</th><th className="border border-slate-300 p-2 text-right">Pemasukan (Rp)</th><th className="border border-slate-300 p-2 text-right">Pengeluaran (Rp)</th></>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {displayedTransactions.length === 0 ? (
+                    <tr><td colSpan={6} className="border border-slate-300 p-4 text-center text-slate-400 italic">
+                      {isStudentPaymentReport
+                        ? `Tidak ada data Infaq / Pembayaran Siswa untuk ${selectedKelas} pada periode ini.`
+                        : isRekapPemasukan
+                        ? 'Tidak ada transaksi pemasukan pada periode ini.'
+                        : isRekapPengeluaran
+                        ? 'Tidak ada transaksi pengeluaran pada periode ini.'
+                        : 'Tidak ada transaksi pada periode ini.'}
+                    </td></tr>
+                  ) : (
+                    displayedTransactions.map((tx, idx) => {
+                      const pemasukan = tx.type === 'IN' ? tx as Pemasukan : null;
+                      const pengeluaran = tx.type === 'OUT' ? tx as Pengeluaran : null;
+                      const siswa = pemasukan?.siswaId ? siswaTagihanList.find(s => s.id === pemasukan.siswaId) : null;
+                      return (<tr key={tx.id}>
+                        <td className="border border-slate-300 p-2 text-center font-mono">{idx + 1}</td>
+                        <td className="border border-slate-300 p-2 font-mono">{tx.tanggal}</td>
+                        <td className="border border-slate-300 p-2 font-mono">{tx.noBukti || tx.id}</td>
+                        {isStudentPaymentReport ? (
+                          <><td className="border border-slate-300 p-2">{siswa?.nama || '—'}</td><td className="border border-slate-300 p-2">{siswa?.jenis || pemasukan?.sub || 'Infaq'}</td><td className="border border-slate-300 p-2 text-right font-mono">{formatRupiah(tx.nominal)}</td></>
+                        ) : isRekapPemasukan ? (
+                          <><td className="border border-slate-300 p-2">{pemasukan?.sumber} {pemasukan?.sub ? `— ${pemasukan.sub}` : ''}</td><td className="border border-slate-300 p-2">{tx.keterangan}</td><td className="border border-slate-300 p-2 text-right font-mono">{formatRupiah(tx.nominal)}</td></>
+                        ) : isRekapPengeluaran ? (
+                          <><td className="border border-slate-300 p-2">{pengeluaran?.kategori || 'Umum'}</td><td className="border border-slate-300 p-2">{tx.keterangan}</td><td className="border border-slate-300 p-2 text-right font-mono">{formatRupiah(tx.nominal)}</td></>
+                        ) : (
+                          <><td className="border border-slate-300 p-2">{tx.keterangan}</td><td className="border border-slate-300 p-2 text-right font-mono">{tx.type === 'IN' ? formatRupiah(tx.nominal) : '-'}</td><td className="border border-slate-300 p-2 text-right font-mono">{tx.type === 'OUT' ? formatRupiah(tx.nominal) : '-'}</td></>
+                        )}
+                      </tr>);
+                    })
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-50 font-bold text-slate-900">
+                    <td colSpan={showTwoColumnNominal ? 4 : 5} className="border border-slate-300 p-2 text-right uppercase">
+                      {isStudentPaymentReport ? 'Total Pembayaran:' : isRekapPemasukan ? 'Total Pemasukan:' : isRekapPengeluaran ? 'Total Pengeluaran:' : 'Total Periode Ini:'}
+                    </td>
+                    <td className={`border border-slate-300 p-2 text-right ${isRekapPengeluaran ? 'text-rose-700' : 'text-emerald-700'}`}>
+                      {formatRupiah(isRekapPengeluaran ? displayedTotalOut : displayedTotalIn)}
+                    </td>
+                    {showTwoColumnNominal && <td className="border border-slate-300 p-2 text-right text-rose-700">{formatRupiah(displayedTotalOut)}</td>}
+                  </tr>
+                  {showSaldoAkhir && (<tr className="bg-slate-100 font-bold text-slate-900"><td colSpan={4} className="border border-slate-300 p-2 text-right uppercase">Saldo Kas Akhir Periode:</td><td colSpan={2} className="border border-slate-300 p-2 text-center text-blue-700 font-mono text-xs">{formatRupiah(finalBalance)}</td></tr>)}
+                </tfoot>
+              </table>
+            )}
           </div>
 
           {/* Formal Signature Block */}
@@ -316,17 +408,17 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
                 <p className="text-slate-600">Mengetahui,</p>
                 <p className="font-bold text-slate-900 mb-16">Kepala Sekolah {currentLembaga}</p>
                 <p className="font-bold text-slate-900 underline">H. Fahru Rozi Ramdhan S.S., M.Pd</p>
-                <p className="text-[10px] text-slate-500">NIP. ...............................................</p>
+                <p className="text-[10px] text-slate-500">NIP. .........................................</p>
               </div>
               <div>
                 <p className="text-slate-600">Cianjur, {printDate}</p>
                 <p className="font-bold text-slate-900 mb-16">Bendahara Sekolah</p>
                 <p className="font-bold text-slate-900 underline">Rizki Mulyana, S.Pd</p>
-                <p className="text-[10px] text-slate-500">NIP. ...............................................</p>
+                <p className="text-[10px] text-slate-500">NIP. .........................................</p>
               </div>
             </div>
             <div className="mt-8 text-[9px] text-slate-400 text-center border-t border-slate-100 pt-2 font-mono">
-              Dokumen ini dicetak secara otomatis dari Portal Rajakas.iD • Yang Terintegrasi
+              Dokumen ini dicetak secara otomatis dari Portal Bendahara SMP Tungturunan • Yang Terintegrasi
             </div>
           </div>
         </div>
