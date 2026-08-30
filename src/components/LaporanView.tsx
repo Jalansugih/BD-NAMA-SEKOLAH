@@ -168,31 +168,102 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Print CSS stylesheet to ensure ONLY the document paper sheet is printed */}
+      {/* Print CSS stylesheet: elemen non-laporan (Sidebar, Navbar, toolbar, panel filter, dst.)
+          sudah disembunyikan total lewat class Tailwind `print:hidden` langsung di elemennya
+          (bukan sekadar visibility:hidden) supaya TIDAK menyisakan ruang kosong di kertas cetak.
+          Blok CSS di bawah ini hanya mengatur tampilan & pagination dokumen itu sendiri, supaya
+          data yang lebih panjang dari 1 halaman otomatis lanjut ke halaman berikutnya dengan rapi
+          (header tabel berulang, baris tidak terpotong di tengah). */}
       <style>{`
         @media print {
-          body * {
-            visibility: hidden !important;
+          @page {
+            size: A4;
+            margin: 12mm;
           }
-          #printable-report, #printable-report * {
-            visibility: visible !important;
+
+          html, body {
+            height: auto !important;
+            overflow: visible !important;
           }
+
+          /* Bebaskan wrapper preview dari overflow/flex agar tidak memotong konten saat dicetak */
+          .print-preview-wrapper {
+            position: static !important;
+            overflow: visible !important;
+            display: block !important;
+            padding: 0 !important;
+            background: transparent !important;
+            border: none !important;
+          }
+
           #printable-report {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
+            position: static !important;
+            display: block !important;
             width: 100% !important;
-            min-height: 100% !important;
-            padding: 20px !important;
+            min-height: 0 !important;
+            height: auto !important;
+            max-height: none !important;
+            padding: 0 !important;
             margin: 0 !important;
             box-shadow: none !important;
             border: none !important;
             background: white !important;
           }
+
+          /* Kop surat & judul laporan jangan sampai terbelah di tengah */
+          .print-kop-surat,
+          .print-report-title {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+
+          /* Tabel: header ikut tercetak ulang di halaman baru, baris data tidak terpotong di tengah */
+          .print-report-table {
+            page-break-inside: auto;
+          }
+          .print-report-table thead {
+            display: table-header-group;
+          }
+          .print-report-table tfoot {
+            display: table-footer-group;
+          }
+          .print-report-table tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+
+          /* Blok tanda tangan tetap satu kesatuan, boleh lanjut ke halaman baru jika tidak muat.
+             CATATAN: sebelumnya kolom tanda tangan sempat diubah ke display:table/table-cell,
+             tapi karena elemennya <div> (bukan <table> asli) tanpa <tr> di antaranya, sebagian
+             mesin cetak salah menghitung tingginya jadi jauh lebih besar dari yang sebenarnya --
+             akibatnya gap kosong di halaman pertama malah makin lebar. Diganti ke teknik float
+             2 kolom (clearfix overflow:hidden) yang jauh lebih tua & konsisten tingginya di semua
+             browser untuk kebutuhan cetak seperti ini. */
+          .print-signature-block {
+            page-break-inside: avoid;
+            break-inside: avoid;
+            break-inside: avoid-page;
+          }
+          .print-signature-grid {
+            display: block !important;
+            width: 100% !important;
+            overflow: hidden !important;
+          }
+          .print-signature-col {
+            display: block !important;
+            float: left !important;
+            width: 46% !important;
+          }
+          .print-signature-col:first-child {
+            margin-right: 8% !important;
+          }
+          .print-signature-col:last-child {
+            margin-right: 0 !important;
+          }
         }
       `}</style>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="print:hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">Laporan Keuangan Otomatis</h1>
           <p className="text-xs text-slate-500">Dibuat instan dari transaksi harian. Siap cetak A4 atau ekspor Excel/CSV untuk Komite & Yayasan.</p>
@@ -216,7 +287,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
       </div>
 
       {/* REPORT CONFIGURATION PANEL */}
-      <div className="bg-white p-6 rounded-[14px] border border-slate-200/90 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="print:hidden bg-white p-6 rounded-[14px] border border-slate-200/90 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1.5">Jenis Laporan Administrasi</label>
           <select 
@@ -280,11 +351,11 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
       </div>
 
       {/* REALTIME A4 PRINT PREVIEW CANVAS */}
-      <div className="bg-slate-300/60 p-6 md:p-10 rounded-[14px] border border-slate-300 overflow-x-auto flex justify-center">
+      <div className="print-preview-wrapper bg-slate-300/60 p-6 md:p-10 rounded-[14px] border border-slate-300 overflow-x-auto flex justify-center">
         <div id="printable-report" className="bg-white w-[210mm] min-h-[297mm] p-12 shadow-2xl text-slate-900 text-xs font-sans relative flex flex-col justify-between">
           <div>
             {/* Official Header Kop Sekolah */}
-            <div className="flex items-center gap-4 pb-4 border-b-2 border-slate-900 mb-6">
+            <div className="print-kop-surat flex items-center gap-4 pb-4 border-b-2 border-slate-900 mb-6">
               <label className="w-16 h-16 shrink-0 bg-slate-100 rounded-lg flex items-center justify-center border border-slate-300 font-bold text-slate-400 text-[10px] overflow-hidden cursor-pointer hover:border-blue-400 transition-all relative group" title="Klik untuk mengganti logo lembaga">
                 {logoDataUrl ? (
                   <img src={logoDataUrl} className="w-full h-full object-contain p-1" alt="Logo" />
@@ -301,7 +372,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
             </div>
 
             {/* Report Title */}
-            <div className="text-center mb-6">
+            <div className="print-report-title text-center mb-6">
               <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 underline">
                 LAPORAN {reportType.toUpperCase()}
               </h3>
@@ -313,7 +384,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
 
             {isSaldoPosisi ? (
               /* SALDO & POSISI KAS: ringkasan saja, tanpa daftar transaksi per-baris */
-              <table className="w-full text-left border-collapse border border-slate-300 text-[11px] mb-8">
+              <table className="print-report-table w-full text-left border-collapse border border-slate-300 text-[11px] mb-8">
                 <tbody className="divide-y divide-slate-200">
                   <tr>
                     <td className="border border-slate-300 p-3 font-semibold w-2/3">Saldo Awal Periode ({reportMonth})</td>
@@ -335,7 +406,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
               </table>
             ) : (
               /* Report Table Body */
-              <table className="w-full text-left border-collapse border border-slate-300 text-[11px] mb-8">
+              <table className="print-report-table w-full text-left border-collapse border border-slate-300 text-[11px] mb-8">
                 <thead>
                   <tr className="bg-slate-100 text-slate-800 font-bold">
                     <th className="border border-slate-300 p-2 text-center w-8">No</th>
@@ -402,15 +473,15 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
           </div>
 
           {/* Formal Signature Block */}
-          <div className="mt-12 pt-6">
-            <div className="grid grid-cols-2 gap-8 text-center text-xs">
-              <div>
+          <div className="print-signature-block mt-12 pt-6">
+            <div className="print-signature-grid grid grid-cols-2 gap-8 text-center text-xs">
+              <div className="print-signature-col">
                 <p className="text-slate-600">Mengetahui,</p>
                 <p className="font-bold text-slate-900 mb-16">Kepala Sekolah {currentLembaga}</p>
                 <p className="font-bold text-slate-900 underline">H. Fahru Rozi Ramdhan S.S., M.Pd</p>
                 <p className="text-[10px] text-slate-500">NIP. .........................................</p>
               </div>
-              <div>
+              <div className="print-signature-col">
                 <p className="text-slate-600">Cianjur, {printDate}</p>
                 <p className="font-bold text-slate-900 mb-16">Bendahara Sekolah</p>
                 <p className="font-bold text-slate-900 underline">Rizki Mulyana, S.Pd</p>

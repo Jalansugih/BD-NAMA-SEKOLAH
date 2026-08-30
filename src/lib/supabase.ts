@@ -114,6 +114,41 @@ export async function signInWithPassword(email: string, password: string): Promi
   return { success: true, session: data.session };
 }
 
+/**
+ * Login dengan Google (OAuth).
+ * BEDA dengan signInWithPassword: fungsi ini TIDAK langsung mengembalikan sesi,
+ * karena browser akan dialihkan (redirect) ke halaman Google lalu kembali lagi
+ * ke aplikasi ini. Setelah kembali, Supabase otomatis mendeteksi token dari URL
+ * dan memicu listener `onAuthStateChange` yang sudah berjalan di App.tsx --
+ * jadi tidak perlu penanganan sesi tambahan di pemanggil fungsi ini.
+ *
+ * PRASYARAT (dilakukan di luar kode, oleh admin/Anda sendiri):
+ * 1. Buat OAuth Client ID di Google Cloud Console (jenis "Web application").
+ * 2. Di Supabase Dashboard > Authentication > Providers > Google, aktifkan
+ *    provider dan isi Client ID & Client Secret dari langkah 1.
+ * 3. Di Google Cloud Console, tambahkan Authorized redirect URI persis:
+ *    https://<project-ref>.supabase.co/auth/v1/callback
+ *    (nilai <project-ref> sama dengan yang ada di VITE_SUPABASE_URL).
+ */
+export async function signInWithGoogle(): Promise<{ success: boolean; message?: string }> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, message: 'Supabase belum dikonfigurasi. Hubungi admin untuk mengatur koneksi database.' };
+  }
+  const { error } = await client.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      // Kembali ke halaman aplikasi yang sedang dibuka setelah login Google selesai.
+      redirectTo: window.location.origin
+    }
+  });
+  if (error) {
+    return { success: false, message: error.message || 'Gagal memulai login dengan Google.' };
+  }
+  // Tidak ada `return session` di sini -- browser sudah dialihkan ke Google.
+  return { success: true };
+}
+
 export async function signOutSupabase(): Promise<void> {
   const client = getSupabaseClient();
   if (!client) return;

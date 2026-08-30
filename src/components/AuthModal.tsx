@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, Mail, Eye, EyeOff, ShieldCheck, X, AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
 import { UserSession } from '../types';
-import { signInWithPassword } from '../lib/supabase';
+import { signInWithPassword, signInWithGoogle } from '../lib/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -32,6 +32,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [logoFailed, setLogoFailed] = useState(false);
@@ -94,6 +95,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onForgotPassword(email);
     } else {
       showToast('Silakan hubungi admin sekolah untuk reset kata sandi.');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    if (googleLoading || loading) return;
+    setErrorMsg(null);
+    setGoogleLoading(true);
+    try {
+      const res = await signInWithGoogle();
+      if (!res.success) {
+        setErrorMsg(res.message || 'Gagal memulai login dengan Google.');
+        setGoogleLoading(false);
+      }
+      // Jika sukses: browser sedang dialihkan ke halaman Google, jadi modal
+      // dibiarkan dalam kondisi loading -- tidak perlu setGoogleLoading(false)
+      // karena komponen ini akan unmount saat halaman berpindah.
+    } catch (err) {
+      console.error('[AuthModal] Google login error:', err);
+      setErrorMsg('Terjadi kendala saat memproses login dengan Google. Silakan coba lagi.');
+      setGoogleLoading(false);
     }
   };
 
@@ -160,6 +181,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         ) : (
           <form onSubmit={handleLogin} noValidate className="p-6 space-y-4">
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={googleLoading || loading}
+              className="w-full h-[50px] flex items-center justify-center gap-2.5 text-sm font-semibold text-slate-700
+                         bg-white border border-slate-300 rounded-[14px] hover:bg-slate-50 active:bg-slate-100
+                         transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {googleLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none text-slate-500" />
+                  <span>Mengalihkan ke Google...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" viewBox="0 0 48 48" aria-hidden="true">
+                    <path fill="#FFC107" d="M43.6 20.5H42V20.4H24v7.2h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.1-5.1C33.5 6.1 29 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/>
+                    <path fill="#FF3D00" d="M6.3 14.7l5.9 4.3C13.8 15.3 18.6 12 24 12c3.1 0 5.9 1.2 8 3.1l5.1-5.1C33.5 6.1 29 4 24 4c-7.4 0-13.8 4.1-17.1 10.1z"/>
+                    <path fill="#4CAF50" d="M24 44c4.9 0 9.4-1.9 12.7-4.9l-5.9-4.9C29 35.9 26.6 36.8 24 36.8c-5.2 0-9.6-3.3-11.2-7.9l-6 4.6C10.1 39.8 16.5 44 24 44z"/>
+                    <path fill="#1976D2" d="M43.6 20.5H42V20.4H24v7.2h11.3c-.8 2.3-2.2 4.2-4.1 5.6l5.9 4.9C40.8 35 44 30.2 44 24c0-1.3-.1-2.7-.4-3.5z"/>
+                  </svg>
+                  <span>Masuk dengan Google</span>
+                </>
+              )}
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-slate-200" />
+              <span className="text-[11px] text-slate-400 font-medium">atau masuk dengan email</span>
+              <div className="h-px flex-1 bg-slate-200" />
+            </div>
+
             <div>
               <label htmlFor="rajakas-email" className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Email

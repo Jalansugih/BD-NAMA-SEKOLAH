@@ -52,6 +52,7 @@ import { SiswaView } from './components/SiswaView';
 import { LaporanView } from './components/LaporanView';
 import { PengaturanView } from './components/PengaturanView';
 import { AuthModal } from './components/AuthModal';
+import { LoginGateScreen } from './components/LoginGateScreen';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import {
   ModalPemasukan, ModalPengeluaran,
@@ -841,19 +842,14 @@ export default function App() {
   // tampilkan layar login.
   if (isConnectedToSupabase && !userSession) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-[#FAFAFC]">
-        <AuthModal
-          isOpen={true}
-          onClose={() => { /* tidak bisa ditutup tanpa login saat mode Supabase */ }}
-          userSession={null}
-          onLoginSuccess={(session) => {
-            setUserSession(session);
-            setIsAuthModalOpen(false);
-            checkAndSyncSupabase();
-          }}
-          showToast={showToast}
-        />
-      </div>
+      <LoginGateScreen
+        onLoginSuccess={(session) => {
+          setUserSession(session);
+          setIsAuthModalOpen(false);
+          checkAndSyncSupabase();
+        }}
+        showToast={showToast}
+      />
     );
   }
 
@@ -871,38 +867,41 @@ export default function App() {
     : pengeluaranList;
 
   return (
-    <div className="flex h-screen w-full overflow-hidden relative bg-[#FAFAFC] text-slate-800 antialiased font-sans">
+    <div className="flex h-screen w-full overflow-hidden relative bg-[#FAFAFC] text-slate-800 antialiased font-sans print:block print:h-auto print:overflow-visible">
       {/* Peringatan Mode Demo Lokal */}
       {!isConnectedToSupabase && (
-        <div className="fixed top-0 inset-x-0 z-40 bg-amber-500 text-white text-[11px] font-semibold text-center py-1">
+        <div className="fixed top-0 inset-x-0 z-40 bg-amber-500 text-white text-[11px] font-semibold text-center py-1 print:hidden">
           Mode Demo Lokal -- belum terhubung ke Supabase. Data hanya tersimpan sementara di browser ini, tidak aman untuk data keuangan sungguhan.
         </div>
       )}
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-3 rounded-[14px] shadow-2xl z-50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom duration-200 text-xs font-semibold">
+        <div className="fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-3 rounded-[14px] shadow-2xl z-50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom duration-200 text-xs font-semibold print:hidden">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
           <span>{toastMessage}</span>
         </div>
       )}
 
       {/* Sidebar Navigation */}
-      <Sidebar
-        activeTab={activeTab}
-        onSwitchTab={setActiveTab}
-        pemasukanCount={pemasukanList.length}
-        pengeluaranCount={pengeluaranList.length}
-        siswaBelumLunasCount={unreadBelumLunasCount}
-        isOpenMobile={isOpenMobileSidebar}
-        onCloseMobile={() => setIsOpenMobileSidebar(false)}
-        onOpenBlueprint={() => setIsBlueprintModalOpen(true)}
-      />
+      <div className="print:hidden contents">
+        <Sidebar
+          activeTab={activeTab}
+          onSwitchTab={setActiveTab}
+          pemasukanCount={pemasukanList.length}
+          pengeluaranCount={pengeluaranList.length}
+          siswaBelumLunasCount={unreadBelumLunasCount}
+          isOpenMobile={isOpenMobileSidebar}
+          onCloseMobile={() => setIsOpenMobileSidebar(false)}
+          onOpenBlueprint={() => setIsBlueprintModalOpen(true)}
+        />
+      </div>
 
       {/* Main Area */}
-      <div className={`flex-1 flex flex-col h-full overflow-hidden ${!isConnectedToSupabase ? 'pt-5' : ''}`}>
+      <div className={`flex-1 flex flex-col h-full overflow-hidden print:block print:h-auto print:overflow-visible print:pt-0 ${!isConnectedToSupabase ? 'pt-5' : ''}`}>
         {/* Top Navbar */}
-        <Navbar
+        <div className="print:hidden contents">
+          <Navbar
           currentLembaga={currentLembaga}
           tahunAjaran={tahunAjaran}
           onSelectLembaga={(nama, jenis) => {
@@ -922,10 +921,11 @@ export default function App() {
             if (isConnectedToSupabase) setIsAuthModalOpen(true);
             showToast('Sesi pengguna telah keluar');
           }}
-        />
+          />
+        </div>
 
         {/* Content Body */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar print:overflow-visible print:h-auto print:p-0">
           {activeTab === 'dashboard' && (
             <DashboardView
               pemasukanList={activePemasukanList}
