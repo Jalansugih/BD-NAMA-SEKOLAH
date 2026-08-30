@@ -159,22 +159,22 @@ export const LoginGateScreen: React.FC<LoginGateScreenProps> = ({
         <div className="flex items-center gap-2.5">
   {!logoFailed ? (
     <img
-      src="/logo-rk-bendahara.png"
-      alt="RajaKas"
-      className="h-9 w-auto object-contain"
-      onError={() => setLogoFailed(true)}
-    />
-  ) : (
-    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-700 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
-      <ShieldCheck className="w-4.5 h-4.5" />
-    </div>
-  )}
+  src="/logo-rk-bendahara.png"
+  alt="RajaKas"
+  className="h-9 w-9 object-contain shrink-0"
+  onError={() => setLogoFailed(true)}
+/>
+) : (
+  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-700 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
+    <ShieldCheck className="w-4.5 h-4.5" />
+  </div>
+)}
 
-  <div className="flex flex-col justify-center">
-    <div className="text-lg font-bold leading-[1] tracking-tight">
-      <span className="text-slate-900">Rajaks</span>
-      <span className="text-blue-400">.id</span>
-    </div>
+<div className="flex flex-col justify-center">
+  <div className="text-lg font-bold leading-[1] tracking-tight">
+    <span className="text-slate-900">Rajakas</span>
+    <span className="text-blue-400">.id</span>
+  </div>
 
     <div className="mt-0.5 text-[10px] sm:text-[11px] font-medium leading-[1] text-slate-500">
       Portal Bendahara
