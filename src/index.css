@@ -1,1 +1,44 @@
 @import "tailwindcss";
+
+/*
+  Token khusus untuk halaman Login baru (LoginPage.tsx).
+  Sengaja TIDAK menimpa --font-sans bawaan (dipakai di seluruh app termasuk
+  layout cetak laporan yang sudah di-tuning) -- font Plus Jakarta Sans hanya
+  dipakai lewat class `font-jakarta` yang di-scope ke halaman login saja.
+*/
+@theme {
+  --font-jakarta: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-50: #eff5ff;
+  --color-brand-100: #dbe8ff;
+  --color-brand-200: #bfd5ff;
+  --color-brand-300: #93b9ff;
+  --color-brand-400: #6094ff;
+  --color-brand-500: #2978ff;
+  --color-brand-600: #1d5bd9;
+  --color-brand-700: #1646b3;
+  --color-brand-800: #173a8f;
+  --color-brand-900: #183372;
+  --color-brand-950: #0f1f47;
+}
+
+/* Dekorasi khusus LoginPage: dot-grid pattern, glass card, blob animasi */
+.login-bg-pattern {
+  background-image: radial-gradient(rgba(41, 120, 255, 0.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.login-glass-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.login-animated-blob {
+  animation: login-float 8s infinite ease-in-out;
+}
+.login-animated-blob-delay {
+  animation: login-float 10s infinite ease-in-out 3s;
+}
+@keyframes login-float {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-18px) scale(1.04); }
+}

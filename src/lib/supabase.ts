@@ -154,3 +154,21 @@ export async function signOutSupabase(): Promise<void> {
   if (!client) return;
   await client.auth.signOut();
 }
+
+/**
+ * Kirim email pemulihan kata sandi lewat Supabase Auth.
+ * Dipakai oleh modal "Lupa Kata Sandi" di LoginPage.tsx.
+ */
+export async function resetPasswordForEmail(email: string): Promise<{ success: boolean; message?: string }> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, message: 'Supabase belum dikonfigurasi. Hubungi admin untuk mengatur koneksi database.' };
+  }
+  const { error } = await client.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin
+  });
+  if (error) {
+    return { success: false, message: error.message || 'Gagal mengirim tautan pemulihan kata sandi.' };
+  }
+  return { success: true };
+}

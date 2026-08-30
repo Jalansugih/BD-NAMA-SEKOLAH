@@ -52,7 +52,7 @@ import { SiswaView } from './components/SiswaView';
 import { LaporanView } from './components/LaporanView';
 import { PengaturanView } from './components/PengaturanView';
 import { AuthModal } from './components/AuthModal';
-import { LoginGateScreen } from './components/LoginGateScreen';
+import { LoginPage } from './components/LoginPage';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import {
   ModalPemasukan, ModalPengeluaran,
@@ -839,10 +839,10 @@ export default function App() {
 
   // GERBANG LOGIN: kalau terhubung ke Supabase (mode produksi sungguhan) tapi
   // belum ada sesi yang valid, jangan render app/data sama sekali -- hanya
-  // tampilkan layar login.
+  // tampilkan layar login penuh (LoginPage), bukan lagi modal kecil.
   if (isConnectedToSupabase && !userSession) {
     return (
-      <LoginGateScreen
+      <LoginPage
         onLoginSuccess={(session) => {
           setUserSession(session);
           setIsAuthModalOpen(false);
