@@ -115,15 +115,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
 
       {/* Header */}
       <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-700 to-brand-500 flex items-center justify-center text-white shadow-lg shadow-brand-500/25">
-            <Wallet className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-xl font-extrabold tracking-tight text-slate-900">rajakas<span className="text-brand-600">.id</span></span>
-            <span className="hidden sm:inline-block ml-2 px-2.5 py-0.5 text-xs font-semibold text-brand-700 bg-brand-50 border border-brand-200/60 rounded-full">Portal Bendahara</span>
-          </div>
-        </div>
+  <div className="flex items-center">
+    <img
+      src="\logo-rk-bendahara.png"
+      alt="Rajakas.id - PT. Putera Raja Madina"
+      className="w-[420px] max-w-full h-auto object-contain"
+    />
+  </div>
 
         <div className="flex items-center gap-4">
           <button
