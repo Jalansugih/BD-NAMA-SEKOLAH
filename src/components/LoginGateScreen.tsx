@@ -159,7 +159,7 @@ export const LoginGateScreen: React.FC<LoginGateScreenProps> = ({
         <div className="h-16 border-b border-slate-200/80 px-4 flex items-center justify-between shrink-0 bg-white">
   <div className="flex items-center gap-3 overflow-hidden">
 
-    <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0">
+    <div className="w-6 h-6 rounded-lg overflow-hidden shrink-0">
       <img
         src="/logo-rk-bendahara.png"
         alt="RajaKas"
@@ -169,11 +169,11 @@ export const LoginGateScreen: React.FC<LoginGateScreenProps> = ({
 
     <div className="flex flex-col min-w-0">
       <div className="flex items-center gap-1.5">
-        <span className="font-bold text-sm tracking-tight text-slate-900 leading-tight truncate">
-          RajaKas<span className="text-blue-600">.id</span>
+        <span className="font-bold text-sm tracking-tight text-slate-700 leading-tight truncate">
+          RajaKas<span className="text-blue-400">.id</span>
         </span>
 
-        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200/60 uppercase shrink-0">
+        <span className="px-0.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200/60 uppercase shrink-0">
           Pro
         </span>
       </div>
