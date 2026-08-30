@@ -155,11 +155,10 @@ export const LoginGateScreen: React.FC<LoginGateScreenProps> = ({
       </div>
 
       {/* Header */}
-      <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
-        <div className="h-16 border-b border-slate-200/80 px-4 flex items-center justify-between shrink-0 bg-white">
-  <div className="flex items-center gap-3 overflow-hidden">
-
-    <div className="w-6 h-6 rounded-lg overflow-hidden shrink-0">
+     <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+  {/* Brand */}
+  <div className="flex items-center gap-2.5 min-w-0">
+    <div className="w-7 h-7 rounded-md overflow-hidden flex items-center justify-center shrink-0 bg-white">
       <img
         src="/logo-rk-bendahara.png"
         alt="RajaKas"
@@ -167,41 +166,42 @@ export const LoginGateScreen: React.FC<LoginGateScreenProps> = ({
       />
     </div>
 
-    <div className="flex flex-col min-w-0">
+    <div className="flex flex-col min-w-0 leading-none">
       <div className="flex items-center gap-1.5">
-        <span className="font-bold text-sm tracking-tight text-slate-700 leading-tight truncate">
-          RajaKas<span className="text-blue-400">.id</span>
+        <span className="font-semibold text-[15px] tracking-[-0.01em] text-slate-800 truncate">
+          RajaKas<span className="text-blue-600">.id</span>
         </span>
 
-        <span className="px-0.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200/60 uppercase shrink-0">
+        <span className="px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wide bg-blue-50 text-blue-600 border border-blue-100 uppercase shrink-0">
           Pro
         </span>
       </div>
 
-      <span className="text-[10px] text-slate-500 font-medium truncate">
+      <span className="mt-1 text-[9px] font-medium tracking-wide text-slate-400 truncate">
         Portal Bendahara
       </span>
     </div>
-
   </div>
-</div>
 
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => setIsHelpOpen(true)}
-            className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1.5"
-          >
-            <HelpCircle className="w-4 h-4" />
-            <span className="hidden sm:inline">Bantuan &amp; Panduan</span>
-          </button>
-          <div className="h-4 w-px bg-slate-300 hidden sm:block" />
-          <div className="text-xs text-slate-500 font-medium hidden sm:flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            Sistem Terenkripsi
-          </div>
-        </div>
-      </header>
+  {/* Right */}
+  <div className="flex items-center gap-4">
+    <button
+      type="button"
+      onClick={() => setIsHelpOpen(true)}
+      className="text-sm font-medium text-slate-500 hover:text-blue-600 transition-colors flex items-center gap-1.5"
+    >
+      <HelpCircle className="w-4 h-4" />
+      <span className="hidden sm:inline">Bantuan &amp; Panduan</span>
+    </button>
+
+    <div className="h-4 w-px bg-slate-200 hidden sm:block" />
+
+    <div className="text-xs text-slate-400 font-medium hidden sm:flex items-center gap-1">
+      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+      Sistem Terenkripsi
+    </div>
+  </div>
+</header>
 
       {/* Konten utama */}
       <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-8">
