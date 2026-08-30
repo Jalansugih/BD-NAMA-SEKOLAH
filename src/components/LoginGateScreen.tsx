@@ -156,29 +156,33 @@ export const LoginGateScreen: React.FC<LoginGateScreenProps> = ({
 
       {/* Header */}
       <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
-        <div className="flex items-center gap-2.5">
- {!logoFailed ? (
-  <img
-    src="/logo-rk-bendahara.png"
-    alt="RajaKas"
-    className="h-9 w-9 object-contain shrink-0"
-    onError={() => setLogoFailed(true)}
-  />
-) : (
-  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-700 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
-    <ShieldCheck className="w-4.5 h-4.5" />
-  </div>
-)}
+        <div className="h-16 border-b border-slate-200/80 px-4 flex items-center justify-between shrink-0 bg-white">
+  <div className="flex items-center gap-3 overflow-hidden">
 
-<div className="flex flex-col justify-center">
-  <div className="text-lg font-bold leading-[1] tracking-tight">
-    <span className="text-slate-900">Rajakas</span>
-    <span className="text-blue-400">.id</span>
-  </div>
-
-    <div className="mt-0.5 text-[10px] sm:text-[11px] font-medium leading-[1] text-slate-500">
-      Portal Bendahara
+    <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0">
+      <img
+        src="/logo-rk-bendahara.png"
+        alt="RajaKas"
+        className="w-full h-full object-contain"
+      />
     </div>
+
+    <div className="flex flex-col min-w-0">
+      <div className="flex items-center gap-1.5">
+        <span className="font-bold text-sm tracking-tight text-slate-900 leading-tight truncate">
+          RajaKas<span className="text-blue-600">.id</span>
+        </span>
+
+        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200/60 uppercase shrink-0">
+          Pro
+        </span>
+      </div>
+
+      <span className="text-[10px] text-slate-500 font-medium truncate">
+        Portal Bendahara
+      </span>
+    </div>
+
   </div>
 </div>
 
