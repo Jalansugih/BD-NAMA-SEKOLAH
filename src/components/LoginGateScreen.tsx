@@ -165,7 +165,7 @@ export const LoginGateScreen: React.FC<LoginGateScreenProps> = ({
     onError={() => setLogoFailed(true)}
   />
 ) : (
-  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-700 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
+  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-700 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
     <ShieldCheck className="w-4.5 h-4.5" />
   </div>
 )}
