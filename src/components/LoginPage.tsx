@@ -114,15 +114,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
       </div>
 
       {/* Header */}
-      <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
-  <div className="flex items-center">
+     <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
+  <div className="flex items-center gap-3">
     <img
-      src="\logo-rk-bendahara.png"
-      alt="Rajakas.id - PT. Putera Raja Madina"
-      className="w-[420px] max-w-full h-auto object-contain"
+      src="/logo-rk-bendahara.png"
+      alt="Rajakas.id"
+      className="w-12 h-12 object-contain"
     />
-  </div>
 
+    <div className="leading-none">
+      <div className="text-3xl font-bold tracking-tight text-slate-900">
+        Rajakas<span className="text-blue-600">.id</span>
+      </div>
+
+      <div className="mt-1 text-xs font-medium text-slate-500">
+        Portal Bendahara
+      </div>
+    </div>
+  </div>
         <div className="flex items-center gap-4">
           <button
             type="button"

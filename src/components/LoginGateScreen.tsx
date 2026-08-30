@@ -157,13 +157,13 @@ export const LoginGateScreen: React.FC<LoginGateScreenProps> = ({
       {/* Header */}
       <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
         <div className="flex items-center gap-2.5">
-  {!logoFailed ? (
-    <img
-  src="/logo-rk-bendahara.png"
-  alt="RajaKas"
-  className="h-9 w-9 object-contain shrink-0"
-  onError={() => setLogoFailed(true)}
-/>
+ {!logoFailed ? (
+  <img
+    src="/logo-rk-bendahara.png"
+    alt="RajaKas"
+    className="h-9 w-9 object-contain shrink-0"
+    onError={() => setLogoFailed(true)}
+  />
 ) : (
   <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-700 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
     <ShieldCheck className="w-4.5 h-4.5" />
