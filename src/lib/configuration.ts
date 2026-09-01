@@ -1,4 +1,4 @@
-import { getSupabaseClient, getCurrentOrganizationId } from './supabase';
+import { getSupabaseClient } from './supabase';
 import { KonfigurasiLembaga } from '../types';
 
 /**
@@ -6,13 +6,21 @@ import { KonfigurasiLembaga } from '../types';
  * Menjawab poin 2 & 3 panduan: konfigurasi lembaga (nama, jenis, logo, saldo
  * awal, identitas lain) disimpan di Supabase (tabel konfigurasi_lembaga).
  *
- * MULTI-TENANT (lihat supabase/migration_v6_multi_tenant.sql): tabel ini
- * sekarang SATU BARIS PER ORGANISASI (organization_id sebagai PRIMARY KEY),
- * bukan lagi singleton global (id = true). Baca & tulis TIDAK lagi
- * menyebutkan organization_id secara manual -- RLS otomatis membatasi baris
- * yang terlihat ke lembaga milik user yang sedang login, dan RPC
- * save_konfigurasi_lembaga() di sisi server yang menyelesaikan
- * organization_id dari sesi login.
+ * PENTING (perbaikan multi-tenant): sejak supabase/migration_v6_multi_tenant.sql,
+ * tabel `konfigurasi_lembaga` BUKAN LAGI singleton dengan kolom `id BOOLEAN`.
+ * Kolom `id` sudah DIHAPUS dan diganti `organization_id UUID` sebagai
+ * PRIMARY KEY (satu baris per lembaga/organisasi). Kode di file ini
+ * SEBELUMNYA masih memakai `.eq('id', true)` dan `.upsert({ id: true, ... })`
+ * -- itu membuat setiap fetch/save konfigurasi lembaga GAGAL TOTAL begitu
+ * migrasi multi-tenant dijalankan (kolom `id` tidak ada lagi), sehingga
+ * login Google/daftar tenant baru "berhasil" tapi lembaga tidak pernah bisa
+ * menyimpan namanya sendiri. Semua fungsi di bawah sudah diperbaiki untuk:
+ *  - fetch: tidak lagi filter `id = true`, cukup andalkan Row Level
+ *    Security (RLS) yang otomatis hanya mengembalikan baris milik
+ *    organisasi user yang sedang login.
+ *  - save: memakai RPC `save_konfigurasi_lembaga(...)` (dibuat di bagian 8
+ *    migration_v6_multi_tenant.sql) yang menyelesaikan organization_id dari
+ *    sesi login di server, alih-alih upsert langsung dengan `id: true`.
  */
 
 const DEFAULT_CONFIG: KonfigurasiLembaga = {
@@ -27,9 +35,11 @@ export async function fetchKonfigurasiLembaga(): Promise<KonfigurasiLembaga | nu
   const client = getSupabaseClient();
   if (!client) return null;
   try {
-    // Tidak ada filter organization_id di sini -- RLS ("organization_id =
-    // get_auth_org_id()") sudah membatasi query ini hanya melihat SATU baris
-    // milik lembaga user yang sedang login, bukan seluruh baris di tabel.
+    // Tidak ada filter eksplisit di sini secara sengaja: RLS pada tabel
+    // konfigurasi_lembaga ("organization_id = get_auth_org_id()") sudah
+    // memastikan hanya baris milik organisasi user yang login yang bisa
+    // terlihat -- dan karena organization_id adalah PRIMARY KEY tabel ini,
+    // hasilnya selalu maksimal 1 baris.
     const { data, error } = await client
       .from('konfigurasi_lembaga')
       .select('*')
@@ -63,10 +73,6 @@ export async function saveKonfigurasiLembaga(
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
 
-  // RPC ini (dibuat di migration_v6_multi_tenant.sql) menyelesaikan
-  // organization_id dari sesi login di server -- frontend tidak pernah
-  // menyimpan/mengirim organization_id sendiri. Semua parameter opsional:
-  // hanya field yang dikirim (bukan undefined) yang diperbarui.
   const { error } = await client.rpc('save_konfigurasi_lembaga', {
     p_nama_lembaga: patch.namaLembaga,
     p_jenis_lembaga: patch.jenisLembaga,
@@ -76,7 +82,6 @@ export async function saveKonfigurasiLembaga(
     p_website: patch.website,
     p_tahun_ajaran: patch.tahunAjaran
   });
-
   if (error) return { success: false, message: error.message };
   return { success: true };
 }
@@ -111,23 +116,19 @@ export async function saveLogoUrl(url: string | null): Promise<{ success: boolea
  * ke konfigurasi_lembaga. Poin 10 panduan: produksi TIDAK lagi memakai
  * Base64 di React State sebagai penyimpanan permanen logo.
  *
- * MULTI-TENANT: path file WAJIB diberi prefix organization_id. Bucket
- * "logos" dipakai bersama oleh SEMUA lembaga -- tanpa prefix ini, dua
- * lembaga yang upload logo akan saling MENIMPA file satu sama lain karena
- * sebelumnya nama filenya selalu sama ("logo-lembaga.<ext>").
+ * Nama file disertai organization_id + timestamp supaya antar lembaga
+ * (multi-tenant) tidak saling menimpa file logo satu sama lain di bucket
+ * Storage yang sama.
  */
 export async function uploadLogoToStorage(file: File): Promise<{ success: boolean; url?: string; message?: string }> {
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
 
   try {
-    const orgId = await getCurrentOrganizationId();
-    if (!orgId) {
-      return { success: false, message: 'Tidak dapat menentukan lembaga aktif untuk sesi ini. Silakan login ulang.' };
-    }
-
+    const { data: userData } = await client.auth.getUser();
+    const uid = userData?.user?.id || 'anon';
     const ext = file.name.split('.').pop() || 'png';
-    const path = `${orgId}/logo-lembaga.${ext}`;
+    const path = `${uid}/logo-lembaga.${ext}`;
 
     const { error: uploadError } = await client.storage
       .from('logos')

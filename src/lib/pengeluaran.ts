@@ -1,4 +1,4 @@
-import { getSupabaseClient, getCurrentOrganizationId } from './supabase';
+import { getSupabaseClient } from './supabase';
 import { Pengeluaran } from '../types';
 
 /**
@@ -42,12 +42,6 @@ export async function fetchPengeluaranFromSupabase(): Promise<Pengeluaran[] | nu
  * Upload file nota/kwitansi ke Supabase Storage bucket "bukti-pengeluaran"
  * dan kembalikan public URL-nya. Dipanggil SEBELUM rpcCatatPengeluaran,
  * agar bukti_url bisa langsung disertakan saat INSERT.
- *
- * MULTI-TENANT: path diberi prefix organization_id. Nama file lama sudah
- * acak sehingga tidak akan bertabrakan antar lembaga, tapi tanpa prefix ini
- * file nota SEMUA lembaga tetap tercampur rata di root bucket yang sama --
- * prefix ini yang jadi dasar pembatasan akses per-lembaga di Storage RLS
- * (lihat Bagian 9 supabase/migration_v6_multi_tenant.sql).
  */
 export async function uploadBuktiPengeluaranToStorage(
   file: File
@@ -56,13 +50,8 @@ export async function uploadBuktiPengeluaranToStorage(
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
 
   try {
-    const orgId = await getCurrentOrganizationId();
-    if (!orgId) {
-      return { success: false, message: 'Tidak dapat menentukan lembaga aktif untuk sesi ini. Silakan login ulang.' };
-    }
-
     const ext = file.name.split('.').pop() || 'jpg';
-    const path = `${orgId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
     const { error: uploadError } = await client.storage
       .from('bukti-pengeluaran')

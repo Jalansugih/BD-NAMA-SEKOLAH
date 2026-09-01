@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import {
   Wallet, HelpCircle, ShieldCheck, Receipt, Lock, Mail, Eye, EyeOff,
-  ArrowRight, Loader2, KeyRound, Headphones, X, AlertTriangle
+  ArrowRight, Loader2, KeyRound, Headphones, X, AlertTriangle, UserPlus
 } from 'lucide-react';
 import { UserSession } from '../types';
-import { signInWithPassword, signInWithGoogle, resetPasswordForEmail } from '../lib/supabase';
+import { signInWithPassword, signUpWithPassword, signInWithGoogle, resetPasswordForEmail } from '../lib/supabase';
 
 interface LoginPageProps {
   onLoginSuccess: (session: UserSession) => void;
@@ -12,33 +12,58 @@ interface LoginPageProps {
 }
 
 /**
- * Halaman login penuh (bukan modal) -- dipakai sebagai "gerbang" utama saat
+ * Halaman login + daftar (bukan modal) -- dipakai sebagai "gerbang" utama saat
  * aplikasi terhubung ke Supabase tapi belum ada sesi login. Desain mengikuti
  * mockup HTML yang diberikan (tema biru "brand" + font Plus Jakarta Sans,
  * di-scope lewat class `font-jakarta` supaya tidak mengubah font di halaman
  * lain / layout cetak laporan).
+ *
+ * MULTI-TENANT: mode "Daftar" (email/password) dan tombol Google di sini
+ * SAMA-SAMA membuat lembaga/organisasi baru yang terisolasi secara otomatis
+ * lewat trigger `on_auth_user_created_multi_tenant`
+ * (supabase/migration_v6_multi_tenant.sql) begitu akun auth.users baru
+ * tercatat -- tidak ada langkah manual admin yang dibutuhkan lagi. Login
+ * Google untuk akun yang sudah pernah daftar otomatis masuk ke organisasi
+ * yang sama (bukan membuat organisasi baru lagi), karena trigger hanya
+ * berjalan saat baris auth.users BARU dibuat.
  */
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast }) => {
+  const [mode, setMode] = useState<'login' | 'daftar'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
 
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isForgotOpen, setIsForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
 
+  const switchMode = (next: 'login' | 'daftar') => {
+    setMode(next);
+    setErrorMsg(null);
+    setFieldErrors({});
+    setConfirmPassword('');
+  };
+
   const validate = () => {
-    const errors: { email?: string; password?: string } = {};
+    const errors: { email?: string; password?: string; confirmPassword?: string } = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email.trim()) errors.email = 'Email wajib diisi.';
     else if (!emailRegex.test(email.trim())) errors.email = 'Format email tidak valid.';
+
     if (!password) errors.password = 'Kata sandi wajib diisi.';
+    else if (mode === 'daftar' && password.length < 6) errors.password = 'Kata sandi minimal 6 karakter.';
+
+    if (mode === 'daftar' && password !== confirmPassword) {
+      errors.confirmPassword = 'Konfirmasi kata sandi tidak sama.';
+    }
+
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -71,6 +96,42 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
     }
   };
 
+  const handleDaftar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    if (!validate()) return;
+    if (loading) return;
+    setLoading(true);
+
+    try {
+      const res = await signUpWithPassword(email, password);
+      if (!res.success) {
+        setErrorMsg(res.message || 'Gagal membuat akun baru. Silakan coba lagi.');
+        setLoading(false);
+        return;
+      }
+      if (res.needsEmailConfirmation || !res.session) {
+        // Project Supabase mewajibkan verifikasi email -- lembaga baru tetap
+        // otomatis dibuat oleh trigger, tapi sesi baru aktif setelah email
+        // dikonfirmasi. Arahkan pengguna kembali ke mode Masuk.
+        showToast(res.message || 'Akun berhasil dibuat. Silakan cek email Anda untuk verifikasi.');
+        setLoading(false);
+        switchMode('login');
+        return;
+      }
+      onLoginSuccess({
+        id: res.session.user.id,
+        email: res.session.user.email || email,
+        role: 'Bendahara Utama'
+      });
+      showToast('Pendaftaran berhasil! Lembaga baru Anda sudah siap dipakai.');
+    } catch (err) {
+      console.error('[LoginPage] Sign up error:', err);
+      setErrorMsg('Terjadi kendala saat membuat akun. Silakan coba lagi.');
+      setLoading(false);
+    }
+  };
+
   const handleGoogleLogin = async () => {
     if (googleLoading || loading) return;
     setErrorMsg(null);
@@ -78,13 +139,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
     try {
       const res = await signInWithGoogle();
       if (!res.success) {
-        setErrorMsg(res.message || 'Gagal memulai login dengan Google.');
+        setErrorMsg(res.message || 'Gagal memulai proses dengan Google.');
         setGoogleLoading(false);
       }
       // Kalau sukses: browser sedang dialihkan ke Google, biarkan tetap loading.
     } catch (err) {
-      console.error('[LoginPage] Google login error:', err);
-      setErrorMsg('Terjadi kendala saat memproses login dengan Google. Silakan coba lagi.');
+      console.error('[LoginPage] Google auth error:', err);
+      setErrorMsg('Terjadi kendala saat memproses permintaan Google. Silakan coba lagi.');
       setGoogleLoading(false);
     }
   };
@@ -194,15 +255,36 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
             </div>
           </div>
 
-          {/* Sisi Kanan: Kartu Login */}
+          {/* Sisi Kanan: Kartu Login / Daftar */}
           <div className="lg:col-span-6 flex justify-center">
             <div className="w-full max-w-sm login-glass-card rounded-2xl p-6 sm:p-7 shadow-xl shadow-brand-500/10 border border-brand-100 relative">
+              {/* Tab Masuk / Daftar */}
+              <div className="flex items-center gap-1 mb-5 p-1 bg-slate-100/80 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => switchMode('login')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mode === 'login' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Masuk
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchMode('daftar')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mode === 'daftar' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Daftar Lembaga Baru
+                </button>
+              </div>
+
               <div className="mb-5">
-                <div className="flex justify-between items-center mb-1.5">
-                  <h2 className="text-xl font-bold text-slate-900">Masuk Portal</h2>
-                  <span className="text-xs font-semibold px-2 py-0.5 bg-brand-50 text-brand-600 border border-brand-200/60 rounded-md">v1.0</span>
-                </div>
-                <p className="text-xs text-slate-500">Silakan masukkan kredensial akun bendahara Anda</p>
+                <h2 className="text-xl font-bold text-slate-900 mb-1.5">
+                  {mode === 'login' ? 'Masuk Portal' : 'Daftarkan Lembaga Anda'}
+                </h2>
+                <p className="text-xs text-slate-500">
+                  {mode === 'login'
+                    ? 'Silakan masukkan kredensial akun bendahara Anda'
+                    : 'Setiap lembaga yang mendaftar otomatis mendapat ruang data sendiri yang terpisah & aman dari lembaga lain.'}
+                </p>
               </div>
 
               <button
@@ -224,10 +306,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
                       <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 10.8 0 12s.7 2.3 1.9 4.7l3.7-2.9z"/>
                       <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.2-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z"/>
                     </svg>
-                    <span>Masuk dengan Google</span>
+                    <span>{mode === 'login' ? 'Masuk dengan Google' : 'Daftar dengan Google'}</span>
                   </>
                 )}
               </button>
+              {mode === 'daftar' && (
+                <p className="text-[10.5px] text-slate-400 -mt-2 mb-4 text-center">
+                  Akun & lembaga baru langsung dibuat otomatis saat pertama kali masuk dengan Google.
+                </p>
+              )}
 
               <div className="relative flex py-1 items-center mb-4">
                 <div className="flex-grow border-t border-slate-200" />
@@ -235,10 +322,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
                 <div className="flex-grow border-t border-slate-200" />
               </div>
 
-              <form onSubmit={handleLogin} noValidate className="space-y-4">
+              <form onSubmit={mode === 'login' ? handleLogin : handleDaftar} noValidate className="space-y-4">
                 <div>
                   <label htmlFor="login-email" className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                    Email Resmi
+                    Email
                   </label>
                   <div className="relative rounded-xl shadow-sm">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -271,13 +358,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
                     <label htmlFor="login-password" className="block text-[11px] font-bold uppercase tracking-wider text-slate-700">
                       Kata Sandi
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => { setForgotEmail(email); setIsForgotOpen(true); }}
-                      className="text-xs font-semibold text-brand-600 hover:underline transition-colors"
-                    >
-                      Lupa?
-                    </button>
+                    {mode === 'login' && (
+                      <button
+                        type="button"
+                        onClick={() => { setForgotEmail(email); setIsForgotOpen(true); }}
+                        className="text-xs font-semibold text-brand-600 hover:underline transition-colors"
+                      >
+                        Lupa?
+                      </button>
+                    )}
                   </div>
                   <div className="relative rounded-xl shadow-sm">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -286,7 +375,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
                     <input
                       id="login-password"
                       type={showPassword ? 'text' : 'password'}
-                      autoComplete="current-password"
+                      autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                       value={password}
                       onChange={(e) => {
                         setPassword(e.target.value);
@@ -313,17 +402,51 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
                   )}
                 </div>
 
-                <div className="flex items-center justify-between pt-0.5">
-                  <label className="flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-3.5 h-3.5 text-brand-600 bg-slate-100 border-slate-300 rounded focus:ring-brand-500 focus:ring-2 cursor-pointer"
-                    />
-                    <span className="ml-2 text-xs font-medium text-slate-600">Ingat sesi saya</span>
-                  </label>
-                </div>
+                {mode === 'daftar' && (
+                  <div>
+                    <label htmlFor="login-confirm-password" className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                      Konfirmasi Kata Sandi
+                    </label>
+                    <div className="relative rounded-xl shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <Lock className="w-3.5 h-3.5" />
+                      </div>
+                      <input
+                        id="login-confirm-password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        value={confirmPassword}
+                        onChange={(e) => {
+                          setConfirmPassword(e.target.value);
+                          if (fieldErrors.confirmPassword) setFieldErrors((p) => ({ ...p, confirmPassword: undefined }));
+                        }}
+                        placeholder="••••••••••••"
+                        aria-invalid={!!fieldErrors.confirmPassword}
+                        aria-describedby={fieldErrors.confirmPassword ? 'login-confirm-password-error' : undefined}
+                        className={`block w-full pl-9 pr-3.5 py-2.5 bg-white border rounded-xl text-slate-800 placeholder-slate-400
+                                   focus:outline-none focus:ring-2 transition-all text-xs font-medium
+                                   ${fieldErrors.confirmPassword ? 'border-rose-300 focus:ring-rose-400 focus:border-rose-400' : 'border-slate-200 focus:ring-brand-500 focus:border-brand-500'}`}
+                      />
+                    </div>
+                    {fieldErrors.confirmPassword && (
+                      <p id="login-confirm-password-error" className="mt-1 text-[11px] text-rose-600">{fieldErrors.confirmPassword}</p>
+                    )}
+                  </div>
+                )}
+
+                {mode === 'login' && (
+                  <div className="flex items-center justify-between pt-0.5">
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="w-3.5 h-3.5 text-brand-600 bg-slate-100 border-slate-300 rounded focus:ring-brand-500 focus:ring-2 cursor-pointer"
+                      />
+                      <span className="ml-2 text-xs font-medium text-slate-600">Ingat sesi saya</span>
+                    </label>
+                  </div>
+                )}
 
                 {errorMsg && (
                   <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-[11px] text-rose-800 flex items-start gap-2">
@@ -342,13 +465,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
                 >
                   {loading ? (
                     <>
-                      <span>Verifikasi Kredensial...</span>
+                      <span>{mode === 'login' ? 'Verifikasi Kredensial...' : 'Membuat Akun...'}</span>
                       <Loader2 className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none" />
                     </>
-                  ) : (
+                  ) : mode === 'login' ? (
                     <>
                       <span>Masuk ke Portal Bendahara</span>
                       <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  ) : (
+                    <>
+                      <span>Daftar & Buat Akun Lembaga</span>
+                      <UserPlus className="w-3.5 h-3.5" />
                     </>
                   )}
                 </button>
@@ -356,14 +484,29 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
 
               <div className="mt-6 pt-4 border-t border-slate-200/80 text-center">
                 <p className="text-xs text-slate-500">
-                  Belum memiliki akun?{' '}
-                  <button
-                    type="button"
-                    onClick={() => showToast('Silakan hubungi Administrator Sekolah untuk membuat akun Bendahara baru.')}
-                    className="font-bold text-brand-600 hover:underline"
-                  >
-                    Pengajuan Akun
-                  </button>
+                  {mode === 'login' ? (
+                    <>
+                      Belum memiliki akun?{' '}
+                      <button
+                        type="button"
+                        onClick={() => switchMode('daftar')}
+                        className="font-bold text-brand-600 hover:underline"
+                      >
+                        Daftarkan Lembaga Baru
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      Sudah memiliki akun?{' '}
+                      <button
+                        type="button"
+                        onClick={() => switchMode('login')}
+                        className="font-bold text-brand-600 hover:underline"
+                      >
+                        Masuk di sini
+                      </button>
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -376,28 +519,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
         <div>
           © 2026 <strong className="text-slate-700">rajakas.id</strong> — Hak Cipta Dilindungi. Sistem Keuangan Sekolah.
         </div>
-        <div className="flex items-center gap-6">
-          <button
-            type="button"
-            onClick={() => showToast('Halaman Kebijakan Privasi belum tersedia. Hubungi Administrator Sekolah untuk info lebih lanjut.')}
-            className="hover:text-brand-600 transition-colors"
-          >
-            Kebijakan Privasi
-          </button>
-          <button
-            type="button"
-            onClick={() => showToast('Halaman Syarat & Ketentuan belum tersedia. Hubungi Administrator Sekolah untuk info lebih lanjut.')}
-            className="hover:text-brand-600 transition-colors"
-          >
-            Syarat &amp; Ketentuan
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsHelpOpen(true)}
-            className="hover:text-brand-600 transition-colors"
-          >
-            Kontak Bantuan
-          </button>
+        <div className="flex items-center gap-2 text-slate-400">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          Portal Bendahara Digital
         </div>
       </footer>
 
@@ -470,8 +594,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
                 <p className="text-xs">Pastikan email dan kata sandi sudah benar. Gunakan menu "Lupa?" jika kata sandi tidak diingat.</p>
               </div>
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <h5 className="font-bold text-slate-800 text-xs uppercase mb-1">Pendaftaran Akun Baru</h5>
-                <p className="text-xs">Pendaftaran bendahara baru dilakukan oleh Administrator Sekolah melalui menu Pengaturan.</p>
+                <h5 className="font-bold text-slate-800 text-xs uppercase mb-1">Pendaftaran Lembaga Baru</h5>
+                <p className="text-xs">Klik tab "Daftar Lembaga Baru" lalu daftar dengan email/kata sandi atau dengan Google. Lembaga baru Anda otomatis dibuat dengan data yang terpisah & aman dari lembaga lain, tanpa perlu menghubungi siapa pun.</p>
               </div>
             </div>
 

@@ -65,10 +65,18 @@ export async function testSupabaseConnection(urlInput?: string, keyInput?: strin
 
   try {
     const testClient = createClient(url, key);
-    const { error } = await testClient.from('konfigurasi_lembaga').select('id').limit(1);
+    // Poin multi-tenant: kolom `id` singleton sudah DIHAPUS oleh
+    // migration_v6_multi_tenant.sql (diganti `organization_id` sebagai
+    // primary key). Query test koneksi HARUS memakai kolom yang masih ada,
+    // kalau tidak setiap load aplikasi akan salah mendeteksi "skema belum
+    // dibuat" padahal skema multi-tenant sudah benar.
+    const { error } = await testClient.from('konfigurasi_lembaga').select('organization_id').limit(1);
     if (error) {
-      if (error.code === 'PGRST116' || error.message.includes('relation') && error.message.includes('does not exist')) {
-        return { success: false, message: 'Koneksi Berhasil, tetapi skema tabel belum dibuat! Silakan jalankan SQL Script Migration (supabase/migration.sql).' };
+      if (error.code === 'PGRST116' || (error.message.includes('relation') && error.message.includes('does not exist'))) {
+        return { success: false, message: 'Koneksi Berhasil, tetapi skema tabel belum dibuat! Jalankan SQL Migration secara berurutan: migration.sql -> migration_periode_pembukuan.sql -> cutoff_migration.sql -> migration_v6_multi_tenant.sql (folder supabase/).' };
+      }
+      if (error.message.includes('organization_id') && error.message.includes('does not exist')) {
+        return { success: false, message: 'Skema multi-tenant belum lengkap: jalankan supabase/migration_v6_multi_tenant.sql di SQL Editor Supabase.' };
       }
       return { success: false, message: `Error Supabase: ${error.message}` };
     }
@@ -99,6 +107,35 @@ export function onAuthStateChange(callback: (session: Session | null) => void) {
     callback(session);
   });
   return () => data.subscription.unsubscribe();
+}
+
+/**
+ * Daftar (sign up) akun baru dengan email & password.
+ * Setiap akun baru otomatis mendapat organisasi (lembaga) sendiri yang
+ * terisolasi lewat trigger `on_auth_user_created_multi_tenant` di
+ * supabase/migration_v6_multi_tenant.sql -- sama seperti login Google
+ * pertama kali. Kalau Supabase project mewajibkan konfirmasi email,
+ * `data.session` akan kosong walau `error` juga kosong; kondisi ini
+ * ditandai lewat `needsEmailConfirmation`.
+ */
+export async function signUpWithPassword(email: string, password: string): Promise<{ success: boolean; session?: Session; needsEmailConfirmation?: boolean; message?: string }> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, message: 'Supabase belum dikonfigurasi. Hubungi admin untuk mengatur koneksi database.' };
+  }
+  const { data, error } = await client.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: window.location.origin }
+  });
+  if (error) {
+    return { success: false, message: error.message || 'Gagal membuat akun baru.' };
+  }
+  if (!data.session) {
+    // Project Supabase mewajibkan verifikasi email sebelum sesi aktif.
+    return { success: true, needsEmailConfirmation: true, message: 'Akun berhasil dibuat. Silakan cek email Anda untuk verifikasi sebelum masuk.' };
+  }
+  return { success: true, session: data.session };
 }
 
 /** Login dengan email & password. TIDAK ada fallback sesi palsu -- jika gagal, gagal. */
@@ -171,39 +208,4 @@ export async function resetPasswordForEmail(email: string): Promise<{ success: b
     return { success: false, message: error.message || 'Gagal mengirim tautan pemulihan kata sandi.' };
   }
   return { success: true };
-}
-
-/**
- * Ambil organization_id milik user yang sedang login (lihat
- * supabase/migration_v6_multi_tenant.sql -- tabel profiles).
- *
- * Sebagian besar tabel data TIDAK butuh ini di frontend: kolom
- * organization_id di sana punya DEFAULT public.get_auth_org_id() di sisi
- * Postgres, jadi insert/select otomatis terisolasi per lembaga tanpa
- * frontend perlu tahu apa-apa.
- *
- * Fungsi ini HANYA dipakai untuk kasus yang tidak otomatis ditangani itu,
- * misal menyusun path folder di Supabase Storage -- supaya file yang
- * diupload lembaga A tidak menimpa/bisa ditebak lembaga B (Storage tidak
- * punya mekanisme DEFAULT kolom seperti tabel Postgres biasa).
- */
-export async function getCurrentOrganizationId(): Promise<string | null> {
-  const client = getSupabaseClient();
-  if (!client) return null;
-  try {
-    const { data: sessionData } = await client.auth.getSession();
-    const userId = sessionData.session?.user?.id;
-    if (!userId) return null;
-
-    const { data, error } = await client
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (error || !data) return null;
-    return (data as any).organization_id as string;
-  } catch {
-    return null;
-  }
 }

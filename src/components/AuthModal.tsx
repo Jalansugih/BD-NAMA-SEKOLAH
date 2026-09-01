@@ -159,7 +159,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             Masuk ke sistem pengelolaan keuangan Anda
           </p>
           <p className="relative text-[11px] text-white/45 mt-2">
-            Kelola kas, transaksi, dan laporan keuangan dengan lebih mudah.
+            Lembaga baru? "Masuk dengan Google" di bawah juga otomatis mendaftarkan lembaga Anda.
           </p>
 
           {/* gold hairline signature */}
