@@ -172,3 +172,38 @@ export async function resetPasswordForEmail(email: string): Promise<{ success: b
   }
   return { success: true };
 }
+
+/**
+ * Ambil organization_id milik user yang sedang login (lihat
+ * supabase/migration_v6_multi_tenant.sql -- tabel profiles).
+ *
+ * Sebagian besar tabel data TIDAK butuh ini di frontend: kolom
+ * organization_id di sana punya DEFAULT public.get_auth_org_id() di sisi
+ * Postgres, jadi insert/select otomatis terisolasi per lembaga tanpa
+ * frontend perlu tahu apa-apa.
+ *
+ * Fungsi ini HANYA dipakai untuk kasus yang tidak otomatis ditangani itu,
+ * misal menyusun path folder di Supabase Storage -- supaya file yang
+ * diupload lembaga A tidak menimpa/bisa ditebak lembaga B (Storage tidak
+ * punya mekanisme DEFAULT kolom seperti tabel Postgres biasa).
+ */
+export async function getCurrentOrganizationId(): Promise<string | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data: sessionData } = await client.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+    if (!userId) return null;
+
+    const { data, error } = await client
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return (data as any).organization_id as string;
+  } catch {
+    return null;
+  }
+}

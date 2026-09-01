@@ -114,24 +114,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
       </div>
 
       {/* Header */}
-     <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
-  <div className="flex items-center gap-3">
-    <img
-      src="/logo-rk-bendahara.png"
-      alt="Rajakas.id"
-      className="w-12 h-12 object-contain"
-    />
+      <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-700 to-brand-500 flex items-center justify-center text-white shadow-lg shadow-brand-500/25">
+            <Wallet className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-xl font-extrabold tracking-tight text-slate-900">rajakas<span className="text-brand-600">.id</span></span>
+            <span className="hidden sm:inline-block ml-2 px-2.5 py-0.5 text-xs font-semibold text-brand-700 bg-brand-50 border border-brand-200/60 rounded-full">Portal Bendahara</span>
+          </div>
+        </div>
 
-    <div className="leading-none">
-      <div className="text-3xl font-bold tracking-tight text-slate-900">
-        Rajakas<span className="text-blue-600">.id</span>
-      </div>
-
-      <div className="mt-1 text-xs font-medium text-slate-500">
-        Portal Bendahara
-      </div>
-    </div>
-  </div>
         <div className="flex items-center gap-4">
           <button
             type="button"
@@ -205,7 +198,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
           <div className="lg:col-span-6 flex justify-center">
             <div className="w-full max-w-sm login-glass-card rounded-2xl p-6 sm:p-7 shadow-xl shadow-brand-500/10 border border-brand-100 relative">
               <div className="mb-5">
-                <h2 className="text-xl font-bold text-slate-900 mb-1.5">Masuk Portal</h2>
+                <div className="flex justify-between items-center mb-1.5">
+                  <h2 className="text-xl font-bold text-slate-900">Masuk Portal</h2>
+                  <span className="text-xs font-semibold px-2 py-0.5 bg-brand-50 text-brand-600 border border-brand-200/60 rounded-md">v1.0</span>
+                </div>
                 <p className="text-xs text-slate-500">Silakan masukkan kredensial akun bendahara Anda</p>
               </div>
 
@@ -242,7 +238,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
               <form onSubmit={handleLogin} noValidate className="space-y-4">
                 <div>
                   <label htmlFor="login-email" className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                    Email
+                    Email Resmi
                   </label>
                   <div className="relative rounded-xl shadow-sm">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -380,9 +376,28 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, showToast 
         <div>
           © 2026 <strong className="text-slate-700">rajakas.id</strong> — Hak Cipta Dilindungi. Sistem Keuangan Sekolah.
         </div>
-        <div className="flex items-center gap-2 text-slate-400">
-          <ShieldCheck className="w-3.5 h-3.5" />
-          Portal Bendahara Digital
+        <div className="flex items-center gap-6">
+          <button
+            type="button"
+            onClick={() => showToast('Halaman Kebijakan Privasi belum tersedia. Hubungi Administrator Sekolah untuk info lebih lanjut.')}
+            className="hover:text-brand-600 transition-colors"
+          >
+            Kebijakan Privasi
+          </button>
+          <button
+            type="button"
+            onClick={() => showToast('Halaman Syarat & Ketentuan belum tersedia. Hubungi Administrator Sekolah untuk info lebih lanjut.')}
+            className="hover:text-brand-600 transition-colors"
+          >
+            Syarat &amp; Ketentuan
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsHelpOpen(true)}
+            className="hover:text-brand-600 transition-colors"
+          >
+            Kontak Bantuan
+          </button>
         </div>
       </footer>
 

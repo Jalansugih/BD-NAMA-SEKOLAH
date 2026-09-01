@@ -678,6 +678,82 @@ $$;
 GRANT EXECUTE ON FUNCTION public.save_konfigurasi_lembaga(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, NUMERIC, TEXT, BOOLEAN) TO authenticated;
 
 
+-- -------------------------------------------------------------------------
+-- 9. STORAGE RLS: ISOLASI FILE PER-LEMBAGA (bucket "logos" &
+--    "bukti-pengeluaran").
+--
+-- TEMUAN AUDIT: migration.sql (Bagian 15-16) membuat kedua bucket ini
+-- "Public" dengan policy SELECT "bucket_id = '...'" TANPA syarat lain --
+-- artinya SIAPAPUN (termasuk yang TIDAK login) bisa membaca file APAPUN di
+-- bucket itu asal tahu/menebak nama filenya, dan sebelum perbaikan ini nama
+-- file logo bahkan SELALU SAMA ("logo-lembaga.<ext>") untuk semua lembaga
+-- (lembaga yang upload belakangan menimpa punya lembaga lain). Kode
+-- frontend (src/lib/configuration.ts, src/lib/pengeluaran.ts) sekarang
+-- sudah menyimpan file di dalam folder "<organization_id>/...", tapi
+-- folder itu HANYA konvensi penamaan kalau tidak ditegakkan lewat policy --
+-- policy di bawah ini yang membuatnya benar-benar wajib.
+--
+-- Nota/kwitansi pengeluaran adalah dokumen keuangan sekolah -- dijadikan
+-- privat (harus login & foldernya milik lembaga sendiri). Kalau nanti
+-- butuh dibagikan publik tanpa login (mis. link cetak laporan eksternal),
+-- itu keputusan produk terpisah -- beri tahu saya supaya policy-nya
+-- disesuaikan, jangan diubah manual jadi permisif lagi.
+-- -------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Logo - baca publik" ON storage.objects;
+DROP POLICY IF EXISTS "Logo - upload user login" ON storage.objects;
+DROP POLICY IF EXISTS "Logo - update user login" ON storage.objects;
+
+CREATE POLICY "Logo - baca sesama anggota lembaga" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'logos'
+    AND auth.role() = 'authenticated'
+    AND (storage.foldername(name))[1] = public.get_auth_org_id()::text
+  );
+CREATE POLICY "Logo - upload ke folder lembaga sendiri" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'logos'
+    AND auth.role() = 'authenticated'
+    AND (storage.foldername(name))[1] = public.get_auth_org_id()::text
+  );
+CREATE POLICY "Logo - update di folder lembaga sendiri" ON storage.objects
+  FOR UPDATE USING (
+    bucket_id = 'logos'
+    AND auth.role() = 'authenticated'
+    AND (storage.foldername(name))[1] = public.get_auth_org_id()::text
+  );
+
+DROP POLICY IF EXISTS "Bukti Pengeluaran - baca publik" ON storage.objects;
+DROP POLICY IF EXISTS "Bukti Pengeluaran - upload user login" ON storage.objects;
+DROP POLICY IF EXISTS "Bukti Pengeluaran - update user login" ON storage.objects;
+
+CREATE POLICY "Bukti Pengeluaran - baca sesama anggota lembaga" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'bukti-pengeluaran'
+    AND auth.role() = 'authenticated'
+    AND (storage.foldername(name))[1] = public.get_auth_org_id()::text
+  );
+CREATE POLICY "Bukti Pengeluaran - upload ke folder lembaga sendiri" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'bukti-pengeluaran'
+    AND auth.role() = 'authenticated'
+    AND (storage.foldername(name))[1] = public.get_auth_org_id()::text
+  );
+CREATE POLICY "Bukti Pengeluaran - update di folder lembaga sendiri" ON storage.objects
+  FOR UPDATE USING (
+    bucket_id = 'bukti-pengeluaran'
+    AND auth.role() = 'authenticated'
+    AND (storage.foldername(name))[1] = public.get_auth_org_id()::text
+  );
+
+-- CATATAN MIGRASI FILE LAMA: kalau bucket ini sebelumnya sudah berisi file
+-- dari sebelum multi-tenant (path tanpa prefix organization_id, mis.
+-- "logo-lembaga.png" langsung di root), file itu TIDAK akan lolos policy
+-- di atas (foldername-nya bukan UUID organisasi manapun) dan efeknya logo
+-- lama tidak akan tampil lagi sampai diupload ulang lewat menu Pengaturan.
+-- Ini konsisten dengan Bagian 2 di atas: HANYA SATU lembaga default hasil
+-- backfill yang datanya lama, jadi cukup upload ulang logo itu SEKALI dari
+-- akun lembaga default tersebut.
+
 -- =========================================================================
 -- SELESAI. LANGKAH SETELAH INI:
 --
@@ -697,4 +773,10 @@ GRANT EXECUTE ON FUNCTION public.save_konfigurasi_lembaga(TEXT, TEXT, TEXT, TEXT
 -- 3) Aplikasi frontend (src/lib/configuration.ts) diperbarui untuk memakai
 --    RPC save_konfigurasi_lembaga() dari Bagian 8 di atas, alih-alih
 --    upsert langsung dengan "id = true" (lihat storage.ts / configuration.ts).
+--
+-- 4) Bucket Storage "logos" dan "bukti-pengeluaran" sekarang WAJIB diakses
+--    lewat path "<organization_id>/nama-file", bukan lagi nama file polos
+--    di root bucket -- frontend (configuration.ts, pengeluaran.ts) sudah
+--    disesuaikan. Kalau ada file lama di root bucket dari sebelum migrasi
+--    ini, lihat catatan di Bagian 9 di atas.
 -- =========================================================================

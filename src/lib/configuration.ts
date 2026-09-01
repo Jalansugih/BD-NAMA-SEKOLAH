@@ -1,11 +1,18 @@
-import { getSupabaseClient } from './supabase';
+import { getSupabaseClient, getCurrentOrganizationId } from './supabase';
 import { KonfigurasiLembaga } from '../types';
 
 /**
  * src/lib/configuration.ts
  * Menjawab poin 2 & 3 panduan: konfigurasi lembaga (nama, jenis, logo, saldo
- * awal, identitas lain) disimpan di Supabase (tabel konfigurasi_lembaga,
- * satu baris singleton), bukan lagi murni React State/hardcode.
+ * awal, identitas lain) disimpan di Supabase (tabel konfigurasi_lembaga).
+ *
+ * MULTI-TENANT (lihat supabase/migration_v6_multi_tenant.sql): tabel ini
+ * sekarang SATU BARIS PER ORGANISASI (organization_id sebagai PRIMARY KEY),
+ * bukan lagi singleton global (id = true). Baca & tulis TIDAK lagi
+ * menyebutkan organization_id secara manual -- RLS otomatis membatasi baris
+ * yang terlihat ke lembaga milik user yang sedang login, dan RPC
+ * save_konfigurasi_lembaga() di sisi server yang menyelesaikan
+ * organization_id dari sesi login.
  */
 
 const DEFAULT_CONFIG: KonfigurasiLembaga = {
@@ -20,10 +27,12 @@ export async function fetchKonfigurasiLembaga(): Promise<KonfigurasiLembaga | nu
   const client = getSupabaseClient();
   if (!client) return null;
   try {
+    // Tidak ada filter organization_id di sini -- RLS ("organization_id =
+    // get_auth_org_id()") sudah membatasi query ini hanya melihat SATU baris
+    // milik lembaga user yang sedang login, bukan seluruh baris di tabel.
     const { data, error } = await client
       .from('konfigurasi_lembaga')
       .select('*')
-      .eq('id', true)
       .maybeSingle();
 
     if (error || !data) return null;
@@ -54,16 +63,20 @@ export async function saveKonfigurasiLembaga(
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
 
-  const payload: Record<string, any> = { id: true, updated_at: new Date().toISOString() };
-  if (patch.namaLembaga !== undefined) payload.nama_lembaga = patch.namaLembaga;
-  if (patch.jenisLembaga !== undefined) payload.jenis_lembaga = patch.jenisLembaga;
-  if (patch.npsn !== undefined) payload.npsn = patch.npsn;
-  if (patch.alamat !== undefined) payload.alamat = patch.alamat;
-  if (patch.kontak !== undefined) payload.kontak = patch.kontak;
-  if (patch.website !== undefined) payload.website = patch.website;
-  if (patch.tahunAjaran !== undefined) payload.tahun_ajaran = patch.tahunAjaran;
+  // RPC ini (dibuat di migration_v6_multi_tenant.sql) menyelesaikan
+  // organization_id dari sesi login di server -- frontend tidak pernah
+  // menyimpan/mengirim organization_id sendiri. Semua parameter opsional:
+  // hanya field yang dikirim (bukan undefined) yang diperbarui.
+  const { error } = await client.rpc('save_konfigurasi_lembaga', {
+    p_nama_lembaga: patch.namaLembaga,
+    p_jenis_lembaga: patch.jenisLembaga,
+    p_npsn: patch.npsn,
+    p_alamat: patch.alamat,
+    p_kontak: patch.kontak,
+    p_website: patch.website,
+    p_tahun_ajaran: patch.tahunAjaran
+  });
 
-  const { error } = await client.from('konfigurasi_lembaga').upsert(payload, { onConflict: 'id' });
   if (error) return { success: false, message: error.message };
   return { success: true };
 }
@@ -72,9 +85,9 @@ export async function saveSaldoAwal(nominal: number): Promise<{ success: boolean
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
 
-  const { error } = await client
-    .from('konfigurasi_lembaga')
-    .upsert({ id: true, saldo_awal: nominal, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+  const { error } = await client.rpc('save_konfigurasi_lembaga', {
+    p_saldo_awal: nominal
+  });
 
   if (error) return { success: false, message: error.message };
   return { success: true };
@@ -84,9 +97,10 @@ export async function saveLogoUrl(url: string | null): Promise<{ success: boolea
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
 
-  const { error } = await client
-    .from('konfigurasi_lembaga')
-    .upsert({ id: true, logo_url: url, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+  const { error } = await client.rpc('save_konfigurasi_lembaga', {
+    p_logo_url: url,
+    p_clear_logo: url === null
+  });
 
   if (error) return { success: false, message: error.message };
   return { success: true };
@@ -96,14 +110,24 @@ export async function saveLogoUrl(url: string | null): Promise<{ success: boolea
  * Upload logo ke Supabase Storage (bucket "logos") dan simpan URL publiknya
  * ke konfigurasi_lembaga. Poin 10 panduan: produksi TIDAK lagi memakai
  * Base64 di React State sebagai penyimpanan permanen logo.
+ *
+ * MULTI-TENANT: path file WAJIB diberi prefix organization_id. Bucket
+ * "logos" dipakai bersama oleh SEMUA lembaga -- tanpa prefix ini, dua
+ * lembaga yang upload logo akan saling MENIMPA file satu sama lain karena
+ * sebelumnya nama filenya selalu sama ("logo-lembaga.<ext>").
  */
 export async function uploadLogoToStorage(file: File): Promise<{ success: boolean; url?: string; message?: string }> {
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
 
   try {
+    const orgId = await getCurrentOrganizationId();
+    if (!orgId) {
+      return { success: false, message: 'Tidak dapat menentukan lembaga aktif untuk sesi ini. Silakan login ulang.' };
+    }
+
     const ext = file.name.split('.').pop() || 'png';
-    const path = `logo-lembaga.${ext}`;
+    const path = `${orgId}/logo-lembaga.${ext}`;
 
     const { error: uploadError } = await client.storage
       .from('logos')
