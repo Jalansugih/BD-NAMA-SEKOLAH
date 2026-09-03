@@ -8,19 +8,10 @@ import { KonfigurasiLembaga } from '../types';
  *
  * PENTING (perbaikan multi-tenant): sejak supabase/migration_v6_multi_tenant.sql,
  * tabel `konfigurasi_lembaga` BUKAN LAGI singleton dengan kolom `id BOOLEAN`.
- * Kolom `id` sudah DIHAPUS dan diganti `organization_id UUID` sebagai
- * PRIMARY KEY (satu baris per lembaga/organisasi). Kode di file ini
- * SEBELUMNYA masih memakai `.eq('id', true)` dan `.upsert({ id: true, ... })`
- * -- itu membuat setiap fetch/save konfigurasi lembaga GAGAL TOTAL begitu
- * migrasi multi-tenant dijalankan (kolom `id` tidak ada lagi), sehingga
- * login Google/daftar tenant baru "berhasil" tapi lembaga tidak pernah bisa
- * menyimpan namanya sendiri. Semua fungsi di bawah sudah diperbaiki untuk:
- *  - fetch: tidak lagi filter `id = true`, cukup andalkan Row Level
- *    Security (RLS) yang otomatis hanya mengembalikan baris milik
- *    organisasi user yang sedang login.
- *  - save: memakai RPC `save_konfigurasi_lembaga(...)` (dibuat di bagian 8
- *    migration_v6_multi_tenant.sql) yang menyelesaikan organization_id dari
- *    sesi login di server, alih-alih upsert langsung dengan `id: true`.
+ * Schema Bendahara sekarang menggunakan `tenant_id` dan RLS tenant-scoped.
+ * Fetch tidak perlu memaksakan tenant_id dari browser; database menentukan
+ * baris yang boleh dibaca melalui `get_my_tenant_id()`.
+ * Save memakai RPC server-side agar tenant_id tidak dapat dipalsukan oleh client.
  */
 
 const DEFAULT_CONFIG: KonfigurasiLembaga = {
@@ -35,11 +26,10 @@ export async function fetchKonfigurasiLembaga(): Promise<KonfigurasiLembaga | nu
   const client = getSupabaseClient();
   if (!client) return null;
   try {
-    // Tidak ada filter eksplisit di sini secara sengaja: RLS pada tabel
-    // konfigurasi_lembaga ("organization_id = get_auth_org_id()") sudah
-    // memastikan hanya baris milik organisasi user yang login yang bisa
-    // terlihat -- dan karena organization_id adalah PRIMARY KEY tabel ini,
-    // hasilnya selalu maksimal 1 baris.
+    // Tidak ada filter tenant_id dari browser. RLS pada tabel
+    // konfigurasi_lembaga memastikan hanya baris tenant user yang login
+    // yang dapat terlihat. Karena konfigurasi adalah singleton per tenant,
+    // maybeSingle() menghasilkan maksimal satu baris.
     const { data, error } = await client
       .from('konfigurasi_lembaga')
       .select('*')
@@ -116,7 +106,7 @@ export async function saveLogoUrl(url: string | null): Promise<{ success: boolea
  * ke konfigurasi_lembaga. Poin 10 panduan: produksi TIDAK lagi memakai
  * Base64 di React State sebagai penyimpanan permanen logo.
  *
- * Nama file disertai organization_id + timestamp supaya antar lembaga
+ * Nama file menggunakan user id + timestamp agar file antar user
  * (multi-tenant) tidak saling menimpa file logo satu sama lain di bucket
  * Storage yang sama.
  */

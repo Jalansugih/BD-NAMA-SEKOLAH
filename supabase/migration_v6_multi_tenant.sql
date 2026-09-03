@@ -550,12 +550,26 @@ BEGIN
 END;
 $$;
 
--- Perbaiki saldo_kas view: dulu "WHERE id = TRUE" (singleton), sekarang
--- konfigurasi_lembaga sudah 1-baris-per-organisasi dan RLS otomatis
--- membatasi baris yang terlihat ke organisasi milik user yang sedang
--- login -- jadi cukup LIMIT 1 tanpa filter tambahan (view ini SECURITY
--- INVOKER / default, bukan DEFINER, sehingga tetap tunduk pada RLS).
-CREATE OR REPLACE VIEW public.saldo_kas AS
+-- BUG KRITIS multi-tenant diperbaiki di sini: view biasa (tanpa opsi
+-- security_invoker) di Postgres dievaluasi dengan HAK AKSES PEMILIK view,
+-- bukan hak akses user yang sedang query -- dan pemilik view di Supabase
+-- SQL Editor adalah role "postgres" yang men-BYPASS Row Level Security.
+-- Akibatnya (sebelum perbaikan ini) query ke saldo_kas SELALU menjumlahkan
+-- pemasukan/pengeluaran/saldo_awal dari SEMUA lembaga sekaligus, bukan cuma
+-- lembaga user yang login -- walau RLS di tabel-tabel itu sendiri sudah
+-- benar. Ini serius karena trigger check_saldo_sebelum_pengeluaran()
+-- (dari migration.sql, TIDAK ditulis ulang di v6 karena SECURITY INVOKER
+-- biasa) memvalidasi SETIAP pencatatan pengeluaran memakai saldo_kas ini --
+-- artinya validasi "saldo tidak cukup" sebelum ini dihitung dari SALDO
+-- GABUNGAN SELURUH LEMBAGA, bukan saldo lembaga itu sendiri. Menambahkan
+-- "security_invoker = true" (Postgres 15+, tersedia di semua project
+-- Supabase saat ini) membuat view ini tunduk pada RLS milik USER YANG
+-- QUERY, sama seperti query langsung ke tabel -- LIMIT 1 di bawah otomatis
+-- jadi benar (RLS membatasi konfigurasi_lembaga ke 1 baris milik lembaga
+-- sendiri) dan SUM/pemasukan/pengeluaran otomatis terlingkup ke lembaga
+-- yang sama.
+CREATE OR REPLACE VIEW public.saldo_kas
+WITH (security_invoker = true) AS
 SELECT
     (SELECT saldo_awal FROM public.konfigurasi_lembaga LIMIT 1)
     + COALESCE((SELECT SUM(nominal) FROM public.pemasukan), 0)

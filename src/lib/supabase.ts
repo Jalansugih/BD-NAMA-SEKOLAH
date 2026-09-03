@@ -65,18 +65,16 @@ export async function testSupabaseConnection(urlInput?: string, keyInput?: strin
 
   try {
     const testClient = createClient(url, key);
-    // Poin multi-tenant: kolom `id` singleton sudah DIHAPUS oleh
-    // migration_v6_multi_tenant.sql (diganti `organization_id` sebagai
-    // primary key). Query test koneksi HARUS memakai kolom yang masih ada,
-    // kalau tidak setiap load aplikasi akan salah mendeteksi "skema belum
-    // dibuat" padahal skema multi-tenant sudah benar.
-    const { error } = await testClient.from('konfigurasi_lembaga').select('organization_id').limit(1);
+    // Poin multi-tenant: kolom organisasi lama tidak digunakan untuk modul Bendahara.
+    // Schema Bendahara sekarang memakai `tenant_id`. Query test koneksi
+    // sengaja memakai kolom tersebut agar tidak salah mendeteksi schema.
+    const { error } = await testClient.from('konfigurasi_lembaga').select('tenant_id').limit(1);
     if (error) {
       if (error.code === 'PGRST116' || (error.message.includes('relation') && error.message.includes('does not exist'))) {
         return { success: false, message: 'Koneksi Berhasil, tetapi skema tabel belum dibuat! Jalankan SQL Migration secara berurutan: migration.sql -> migration_periode_pembukuan.sql -> cutoff_migration.sql -> migration_v6_multi_tenant.sql (folder supabase/).' };
       }
-      if (error.message.includes('organization_id') && error.message.includes('does not exist')) {
-        return { success: false, message: 'Skema multi-tenant belum lengkap: jalankan supabase/migration_v6_multi_tenant.sql di SQL Editor Supabase.' };
+      if (error.message.includes('tenant_id') && error.message.includes('does not exist')) {
+        return { success: false, message: 'Schema Bendahara belum lengkap: kolom tenant_id pada konfigurasi_lembaga belum tersedia.' };
       }
       return { success: false, message: `Error Supabase: ${error.message}` };
     }
