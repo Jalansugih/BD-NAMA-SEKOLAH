@@ -366,8 +366,8 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
               </label>
               <div className="flex-1 text-center">
                 <h2 className="text-base font-bold uppercase tracking-wide text-slate-900">{currentLembaga}</h2>
-                <p className="text-[11px] text-slate-600">Kp. Selajambe Rt/Rw : 04/05 Desa Hegarmanah, Kec. Sukaluyu, Cianjur 43284 Telp. 0263-2324180</p>
-                <p className="text-[10px] text-slate-500 font-mono mt-0.5">Email: smp.tungturunan@gmail.com | NPSN: 20252330</p>
+                <p className="text-[11px] text-slate-600">Kp. Lewibungur Rt/Rw : 03/05 Desa Sukagalih, Kec. Cikalongkulon, Cianjur 43281 Telp. 0263-2324180</p>
+                <p className="text-[10px] text-slate-500 font-mono mt-0.5">Email: mts.admin@mtsnb.com | NPSN: 20252330</p>
               </div>
             </div>
 
@@ -489,7 +489,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
               </div>
             </div>
             <div className="mt-8 text-[9px] text-slate-400 text-center border-t border-slate-100 pt-2 font-mono">
-              Dokumen ini dicetak secara otomatis dari Portal Bendahara SMP Tungturunan • Yang Terintegrasi
+              Dokumen ini dicetak secara otomatis dari Portal Bendahara By Rajakas.ID • Yang Terintegrasi
             </div>
           </div>
         </div>
