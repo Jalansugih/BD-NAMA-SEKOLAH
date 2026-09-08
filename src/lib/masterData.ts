@@ -2,16 +2,12 @@ import { getSupabaseClient } from './supabase';
 import { MasterSumberDana } from '../types';
 
 /**
- * Master data disimpan di Supabase dan dipisahkan berdasarkan tenant user login.
- * tenant_id selalu diambil dari get_my_tenant_id(), bukan dari input UI.
+ * Master data disimpan di Supabase dan diisolasi oleh RLS berdasarkan
+ * organization_id milik user yang sedang login.
+ *
+ * organization_id tidak dikirim dari frontend. Database mengisinya otomatis
+ * melalui DEFAULT public.get_auth_org_id().
  */
-
-async function getTenantId(client: any): Promise<{ tenantId?: string; error?: string }> {
-  const { data, error } = await client.rpc('get_my_tenant_id');
-  if (error) return { error: `Gagal mendapatkan tenant: ${error.message}` };
-  if (!data) return { error: 'TENANT_TIDAK_DITEMUKAN: User belum memiliki tenant.' };
-  return { tenantId: data };
-}
 
 // ---------- MASTER KELAS ----------
 
@@ -29,13 +25,8 @@ export async function fetchMasterKelas(): Promise<string[] | null> {
 export async function insertMasterKelas(nama: string): Promise<{ success: boolean; message?: string }> {
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
-
-  const tenant = await getTenantId(client);
-  if (!tenant.tenantId) return { success: false, message: tenant.error };
-
   const { error } = await client.from('master_kelas').insert([{
-    nama,
-    tenant_id: tenant.tenantId
+    nama
   }]);
   if (error) return { success: false, message: error.message };
   return { success: true };
@@ -65,15 +56,10 @@ export async function fetchMasterSumberDana(): Promise<MasterSumberDana[] | null
 export async function insertMasterSumberDana(item: MasterSumberDana): Promise<{ success: boolean; message?: string }> {
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
-
-  const tenant = await getTenantId(client);
-  if (!tenant.tenantId) return { success: false, message: tenant.error };
-
   const { error } = await client.from('master_sumber_dana').insert([{
     id: item.id,
     name: item.name,
-    subs: item.subs,
-    tenant_id: tenant.tenantId
+    subs: item.subs
   }]);
   if (error) return { success: false, message: error.message };
   return { success: true };
@@ -103,13 +89,8 @@ export async function fetchMasterKategori(): Promise<string[] | null> {
 export async function insertMasterKategori(nama: string): Promise<{ success: boolean; message?: string }> {
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
-
-  const tenant = await getTenantId(client);
-  if (!tenant.tenantId) return { success: false, message: tenant.error };
-
   const { error } = await client.from('master_kategori').insert([{
-    nama,
-    tenant_id: tenant.tenantId
+    nama
   }]);
   if (error) return { success: false, message: error.message };
   return { success: true };

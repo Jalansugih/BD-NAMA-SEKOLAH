@@ -4,9 +4,9 @@ import { Pemasukan } from '../types';
 /**
  * Pemasukan server-side.
  *
- * tenant_id tidak diambil dari form/user input.
- * tenant_id selalu diambil dari tenant_members melalui
- * RPC get_my_tenant_id() berdasarkan auth.uid().
+ * organization_id tidak diambil dari form/user input.
+ * Database mengisi organization_id otomatis melalui
+ * DEFAULT public.get_auth_org_id() dan RLS memvalidasi tenant.
  */
 
 export async function fetchPemasukanFromSupabase(): Promise<Pemasukan[] | null> {
@@ -59,29 +59,8 @@ export async function insertPemasukanSupabase(item: {
 
   try {
     /*
-     * Ambil tenant berdasarkan user yang sedang login.
-     * Tidak menerima tenant_id dari frontend.
-     */
-    const { data: tenantId, error: tenantError } = await client.rpc(
-      'get_my_tenant_id'
-    );
-
-    if (tenantError) {
-      return {
-        success: false,
-        message: `Gagal mendapatkan tenant: ${tenantError.message}`
-      };
-    }
-
-    if (!tenantId) {
-      return {
-        success: false,
-        message: 'TENANT_TIDAK_DITEMUKAN: User belum memiliki tenant.'
-      };
-    }
-
-    /*
-     * Insert dengan tenant_id milik user yang sedang login.
+     * organization_id ditentukan oleh database melalui DEFAULT
+     * public.get_auth_org_id(). Frontend tidak boleh mengirim tenant id.
      */
     const { error } = await client
       .from('pemasukan')
@@ -93,8 +72,7 @@ export async function insertPemasukanSupabase(item: {
           sub: item.sub,
           nominal: item.nominal,
           keterangan: item.keterangan,
-          status: item.status || 'Selesai',
-          tenant_id: tenantId
+          status: item.status || 'Selesai'
         }
       ]);
 

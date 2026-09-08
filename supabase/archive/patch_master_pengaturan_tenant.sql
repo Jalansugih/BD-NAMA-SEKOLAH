@@ -1,0 +1,9 @@
+-- OBSOLETE: jangan jalankan file ini.
+--
+-- Database Bendahara terbaru memakai organization_id + get_auth_org_id(),
+-- bukan tenant_id + get_my_tenant_id().
+-- Pengamanan/provisioning terbaru ada di:
+--   supabase/migration_v7_multi_tenant.sql
+--   supabase/migration_v8_user_provisioning.sql
+--
+-- File ini dipertahankan hanya untuk riwayat/kompatibilitas backup lama.

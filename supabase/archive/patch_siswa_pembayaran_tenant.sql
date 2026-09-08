@@ -1,0 +1,6 @@
+-- OBSOLETE: jangan jalankan file ini.
+--
+-- Patch lama memakai tenant_id + get_my_tenant_id().
+-- Versi database terbaru memakai organization_id + get_auth_org_id().
+-- RPC catat_pembayaran_siswa() yang benar sekarang didefinisikan di:
+--   supabase/migration_v8_user_provisioning.sql

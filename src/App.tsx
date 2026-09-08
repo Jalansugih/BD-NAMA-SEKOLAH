@@ -10,7 +10,7 @@ import {
 } from './data/initialData';
 
 import {
-  testSupabaseConnection, getCurrentSession, onAuthStateChange, signOutSupabase
+  testSupabaseConnection, getCurrentSession, ensureMyTenant, onAuthStateChange, signOutSupabase
 } from './lib/supabase';
 
 import {
@@ -259,8 +259,16 @@ export default function App() {
   // Sync / Test Supabase on mount
   useEffect(() => {
     checkAndSyncSupabase();
-    const unsubscribe = onAuthStateChange((session) => {
+    const unsubscribe = onAuthStateChange(async (session) => {
       if (session) {
+        // Wajib bootstrap tenant sebelum query/insert tabel apa pun.
+        // Ini membuat akun baru tetap berfungsi walaupun trigger signup pernah
+        // gagal/tidak terpasang saat akun dibuat.
+        const tenant = await ensureMyTenant();
+        if (!tenant.success) {
+          showToast(`Gagal menyiapkan lembaga: ${tenant.message || 'Tenant belum tersedia.'}`);
+          return;
+        }
         setUserSession({
           id: session.user.id,
           email: session.user.email || '',
@@ -285,6 +293,13 @@ export default function App() {
     if (res.success) {
       const session = await getCurrentSession();
       if (session) {
+        const tenant = await ensureMyTenant();
+        if (!tenant.success) {
+          setUserSession(null);
+          showToast(`Gagal menyiapkan lembaga: ${tenant.message || 'Tenant belum tersedia.'}`);
+          setAuthModalOpen(true);
+          return;
+        }
         setUserSession({
           id: session.user.id,
           email: session.user.email || '',

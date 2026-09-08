@@ -65,16 +65,15 @@ export async function testSupabaseConnection(urlInput?: string, keyInput?: strin
 
   try {
     const testClient = createClient(url, key);
-    // Poin multi-tenant: kolom organisasi lama tidak digunakan untuk modul Bendahara.
-    // Schema Bendahara sekarang memakai `tenant_id`. Query test koneksi
-    // sengaja memakai kolom tersebut agar tidak salah mendeteksi schema.
-    const { error } = await testClient.from('konfigurasi_lembaga').select('tenant_id').limit(1);
+    // Schema Bendahara hardened menggunakan organization_id.
+    // organization_id juga menjadi sumber isolasi RLS untuk seluruh tenant.
+    const { error } = await testClient.from('konfigurasi_lembaga').select('organization_id').limit(1);
     if (error) {
       if (error.code === 'PGRST116' || (error.message.includes('relation') && error.message.includes('does not exist'))) {
         return { success: false, message: 'Koneksi Berhasil, tetapi skema tabel belum dibuat! Jalankan SQL Migration secara berurutan: migration.sql -> migration_periode_pembukuan.sql -> cutoff_migration.sql -> migration_v6_multi_tenant.sql (folder supabase/).' };
       }
-      if (error.message.includes('tenant_id') && error.message.includes('does not exist')) {
-        return { success: false, message: 'Schema Bendahara belum lengkap: kolom tenant_id pada konfigurasi_lembaga belum tersedia.' };
+      if (error.message.includes('organization_id') && error.message.includes('does not exist')) {
+        return { success: false, message: 'Schema Bendahara belum lengkap: kolom organization_id pada konfigurasi_lembaga belum tersedia.' };
       }
       return { success: false, message: `Error Supabase: ${error.message}` };
     }
@@ -89,6 +88,14 @@ export async function testSupabaseConnection(urlInput?: string, keyInput?: strin
 // =========================================================================
 
 /** Ambil sesi login saat ini dari Supabase (null jika belum login / belum terhubung). */
+export async function ensureMyTenant(): Promise<{ success: boolean; organizationId?: string; message?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, message: 'Supabase belum terhubung.' };
+  const { data, error } = await client.rpc('ensure_my_tenant');
+  if (error) return { success: false, message: error.message };
+  return { success: true, organizationId: data?.organization_id };
+}
+
 export async function getCurrentSession(): Promise<Session | null> {
   const client = getSupabaseClient();
   if (!client) return null;

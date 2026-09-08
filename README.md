@@ -112,3 +112,9 @@ Lihat panduan langkah-demi-langkah di chat (Vercel/Netlify + Supabase).
   Storage `logos`) supaya logo satu lembaga tidak menimpa logo lembaga
   lain.
 - Jangan pernah commit `.env.local` ke git (sudah ada di `.gitignore`).
+
+## V9 Production Fix — akun baru & RLS
+
+Sebelum deploy, jalankan `supabase/FINAL_PRODUCTION_FIX_V9.sql` sekali. Migration ini memperbaiki bootstrap tenant untuk akun baru dan normalisasi `konfigurasi_lembaga` yang masih memiliki `id` lama.
+
+Setelah itu akun baru wajib memanggil RPC `ensure_my_tenant()` setelah login; frontend release V9 sudah melakukannya.

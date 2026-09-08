@@ -1,12 +1,12 @@
--- ============================================================================
--- RAJAKAS BENDAHARA - PATCH SISWA/TAGIHAN + PEMBAYARAN MULTI-TENANT
--- Jalankan SETELAH struktur tenant_id + RLS multi-tenant sudah aktif.
+-- RAJAKAS BENDAHARA - PATCH PEMBAYARAN SISWA (HARDENED MULTI-TENANT)
+-- Jalankan SETELAH migration_v6_multi_tenant.sql + migration_v7_multi_tenant.sql.
+-- Skema canonical: organization_id + public.get_auth_org_id().
 --
--- Memperbaiki:
--- 1. Tambah Tagihan Siswa: insert tenant_id dari user login.
--- 2. Pembayaran Siswa: RPC catat_pembayaran_siswa() tenant-aware dan
---    mengisi tenant_id pada pemasukan.
--- ============================================================================
+-- Penting:
+-- - Jangan gunakan RPC tenant legacy.
+-- - Jangan membaca/menulis kolom tenant legacy.
+-- - organization_id untuk siswa_tagihan dan pemasukan diambil/diisi server-side.
+-- - Fungsi SECURITY INVOKER membiarkan RLS membatasi data ke organisasi aktif.
 
 CREATE OR REPLACE FUNCTION public.catat_pembayaran_siswa(
     p_siswa_id UUID,
@@ -21,14 +21,14 @@ SECURITY INVOKER
 SET search_path = public
 AS $$
 DECLARE
-    v_tenant_id UUID;
+    v_org_id UUID;
     v_siswa RECORD;
     v_inserted_row RECORD;
 BEGIN
-    v_tenant_id := public.get_my_tenant_id();
+    v_org_id := public.get_auth_org_id();
 
-    IF v_tenant_id IS NULL THEN
-        RAISE EXCEPTION 'TENANT_TIDAK_DITEMUKAN: User belum memiliki tenant.';
+    IF v_org_id IS NULL THEN
+        RAISE EXCEPTION 'ORGANISASI_TIDAK_DITEMUKAN: User belum memiliki organisasi.';
     END IF;
 
     IF p_nominal IS NULL OR p_nominal <= 0 THEN
@@ -39,10 +39,10 @@ BEGIN
       INTO v_siswa
       FROM public.siswa_tagihan
      WHERE id = p_siswa_id
-       AND tenant_id = v_tenant_id;
+       AND organization_id = v_org_id;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'SISWA_TIDAK_DITEMUKAN: Data tagihan siswa tidak ditemukan pada tenant ini';
+        RAISE EXCEPTION 'SISWA_TIDAK_DITEMUKAN: Data tagihan siswa tidak ditemukan pada organisasi ini';
     END IF;
 
     INSERT INTO public.pemasukan (
@@ -54,8 +54,7 @@ BEGIN
         keterangan,
         status,
         siswa_id,
-        created_by,
-        tenant_id
+        created_by
     )
     VALUES (
         p_no_bukti,
@@ -67,8 +66,7 @@ BEGIN
           v_siswa.nama || ' (' || v_siswa.kelas || ')',
         COALESCE(NULLIF(p_status, ''), 'Selesai'),
         p_siswa_id,
-        auth.uid(),
-        v_tenant_id
+        auth.uid()
     )
     RETURNING * INTO v_inserted_row;
 

@@ -8,10 +8,10 @@ import { KonfigurasiLembaga } from '../types';
  *
  * PENTING (perbaikan multi-tenant): sejak supabase/migration_v6_multi_tenant.sql,
  * tabel `konfigurasi_lembaga` BUKAN LAGI singleton dengan kolom `id BOOLEAN`.
- * Schema Bendahara sekarang menggunakan `tenant_id` dan RLS tenant-scoped.
- * Fetch tidak perlu memaksakan tenant_id dari browser; database menentukan
- * baris yang boleh dibaca melalui `get_my_tenant_id()`.
- * Save memakai RPC server-side agar tenant_id tidak dapat dipalsukan oleh client.
+ * Schema Bendahara sekarang menggunakan `organization_id` dan RLS tenant-scoped.
+ * Fetch tidak perlu memaksakan organization_id dari browser; database menentukan
+ * baris yang boleh dibaca melalui `get_auth_org_id()`.
+ * Save memakai RPC server-side agar organization_id tidak dapat dipalsukan oleh client.
  */
 
 const DEFAULT_CONFIG: KonfigurasiLembaga = {
@@ -26,8 +26,8 @@ export async function fetchKonfigurasiLembaga(): Promise<KonfigurasiLembaga | nu
   const client = getSupabaseClient();
   if (!client) return null;
   try {
-    // Tidak ada filter tenant_id dari browser. RLS pada tabel
-    // konfigurasi_lembaga memastikan hanya baris tenant user yang login
+    // Tidak ada filter organization_id dari browser. RLS pada tabel
+    // konfigurasi_lembaga memastikan hanya baris organisasi user yang login
     // yang dapat terlihat. Karena konfigurasi adalah singleton per tenant,
     // maybeSingle() menghasilkan maksimal satu baris.
     const { data, error } = await client
@@ -106,19 +106,26 @@ export async function saveLogoUrl(url: string | null): Promise<{ success: boolea
  * ke konfigurasi_lembaga. Poin 10 panduan: produksi TIDAK lagi memakai
  * Base64 di React State sebagai penyimpanan permanen logo.
  *
- * Nama file menggunakan user id + timestamp agar file antar user
- * (multi-tenant) tidak saling menimpa file logo satu sama lain di bucket
- * Storage yang sama.
+ * File disimpan di folder organization_id agar sesuai dengan RLS Storage
+ * dan tidak bercampur antar organisasi.
  */
 export async function uploadLogoToStorage(file: File): Promise<{ success: boolean; url?: string; message?: string }> {
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
 
   try {
-    const { data: userData } = await client.auth.getUser();
-    const uid = userData?.user?.id || 'anon';
+    // Folder Storage WAJIB memakai organization_id karena policy RLS
+    // storage.objects memvalidasi folder pertama terhadap get_auth_org_id().
+    const { data: orgId, error: orgError } = await client.rpc('get_auth_org_id');
+    if (orgError) {
+      return { success: false, message: `Gagal mendapatkan organisasi: ${orgError.message}` };
+    }
+    if (!orgId) {
+      return { success: false, message: 'ORGANISASI_TIDAK_DITEMUKAN: User belum memiliki organisasi.' };
+    }
+
     const ext = file.name.split('.').pop() || 'png';
-    const path = `${uid}/logo-lembaga.${ext}`;
+    const path = `${orgId}/logo-lembaga.${ext}`;
 
     const { error: uploadError } = await client.storage
       .from('logos')

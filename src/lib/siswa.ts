@@ -5,8 +5,8 @@ import { SiswaTagihan, Pemasukan } from '../types';
  * Data siswa/tagihan dan pembayaran siswa disimpan di Supabase.
  *
  * Multi-tenant:
- * - tenant_id TIDAK berasal dari form/frontend.
- * - tenant_id diambil dari get_my_tenant_id() berdasarkan auth.uid().
+ * - organization_id TIDAK berasal dari form/frontend.
+ * - Database mengisinya otomatis melalui DEFAULT public.get_auth_org_id().
  */
 
 export async function fetchSiswaTagihan(): Promise<SiswaTagihan[] | null> {
@@ -49,32 +49,14 @@ export async function insertSiswaTagihan(data: {
   }
 
   try {
-    // Tenant ditentukan server berdasarkan user yang sedang login.
-    const { data: tenantId, error: tenantError } = await client.rpc(
-      'get_my_tenant_id'
-    );
-
-    if (tenantError) {
-      return {
-        success: false,
-        message: `Gagal mendapatkan tenant: ${tenantError.message}`
-      };
-    }
-
-    if (!tenantId) {
-      return {
-        success: false,
-        message: 'TENANT_TIDAK_DITEMUKAN: User belum memiliki tenant.'
-      };
-    }
-
+    // organization_id ditentukan database berdasarkan user yang sedang login.
+    // Jangan mengirim organization_id dari browser agar tenant tidak dapat dipalsukan.
     const { error } = await client.from('siswa_tagihan').insert([{
       nama: data.nama,
       kelas: data.kelas,
       jenis: data.jenis,
       target: data.target,
-      catatan: data.catatan || null,
-      tenant_id: tenantId
+      catatan: data.catatan || null
     }]);
 
     if (error) {
