@@ -1,4 +1,5 @@
 import { getSupabaseClient } from './supabase';
+import { ensureUserSetup } from './userProvisioning';
 import { PeriodePembukuan } from '../types';
 
 const LOCAL_KEY = 'rajasch_periode_pembukuan_v1';
@@ -52,21 +53,26 @@ export async function updateTahunAjaranAktif(tahunAjaran: string): Promise<{ suc
     return { success: true };
   }
 
+  const setup = await ensureUserSetup();
+  if (!setup.success) return { success: false, message: setup.message };
+
   const { data: active, error: readError } = await client
     .from('periode_pembukuan')
-    .select('id')
+    .select('id, tanggal_mulai, saldo_awal')
     .eq('status', 'AKTIF')
+    .order('tanggal_mulai', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (readError) return { success: false, message: readError.message };
-  if (!active) return { success: true };
+  if (!active) return { success: false, message: 'Periode aktif tidak ditemukan di database.' };
 
-  const { error } = await client
-    .from('periode_pembukuan')
-    .update({ tahun_ajaran: tahunAjaran, nama_periode: tahunAjaran })
-    .eq('id', active.id)
-    .eq('status', 'AKTIF');
+  const { error } = await client.rpc('save_periode_aktif', {
+    p_periode_id: active.id,
+    p_tahun_ajaran: tahunAjaran,
+    p_tanggal_mulai: active.tanggal_mulai,
+    p_saldo_awal: Number(active.saldo_awal || 0)
+  });
 
   if (error) return { success: false, message: error.message };
   return { success: true };
@@ -80,7 +86,6 @@ export async function updatePeriodeAktifSettings(
 ): Promise<{ success: boolean; message?: string }> {
   const client = getSupabaseClient();
 
-  // Lokal/demo: jangan bergantung pada ID React; cari periode AKTIF langsung.
   if (!client) {
     const items = getLocalPeriodePembukuan();
     const idx = items.findIndex(x =>
@@ -99,48 +104,30 @@ export async function updatePeriodeAktifSettings(
     return { success: true };
   }
 
-  // Produksi: selalu verifikasi periode AKTIF langsung dari database.
-  // Ini mencegah state React yang stale/kosong menyebabkan "periode tidak ditemukan".
-  let targetId = id;
+  const setup = await ensureUserSetup();
+  if (!setup.success) return { success: false, message: setup.message };
 
-  if (!targetId) {
-    const { data: active, error: readError } = await client
-      .from('periode_pembukuan')
-      .select('id')
-      .eq('status', 'AKTIF')
-      .order('tanggal_mulai', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (readError) {
-      return { success: false, message: `Gagal membaca periode aktif: ${readError.message}` };
-    }
-
-    targetId = active?.id ?? null;
-  }
-
-  if (!targetId) {
-    return { success: false, message: 'Periode aktif tidak ditemukan di database.' };
-  }
-
-  const { data: updated, error } = await client
+  const { data: active, error: readError } = await client
     .from('periode_pembukuan')
-    .update({
-      nama_periode: tahunAjaran,
-      tahun_ajaran: tahunAjaran,
-      tanggal_mulai: tanggalMulai,
-      saldo_awal: saldoAwal
-    })
-    .eq('id', targetId)
-    .eq('status', 'AKTIF')
     .select('id')
+    .eq('status', 'AKTIF')
+    .order('tanggal_mulai', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
-  if (error) return { success: false, message: error.message };
-  if (!updated) {
-    return { success: false, message: 'Periode aktif tidak ditemukan atau tidak dapat diperbarui.' };
-  }
+  if (readError) return { success: false, message: `Gagal membaca periode aktif: ${readError.message}` };
 
+  const targetId = id || active?.id || null;
+  if (!targetId) return { success: false, message: 'Periode aktif tidak ditemukan di database.' };
+
+  const { error } = await client.rpc('save_periode_aktif', {
+    p_periode_id: targetId,
+    p_tahun_ajaran: tahunAjaran,
+    p_tanggal_mulai: tanggalMulai,
+    p_saldo_awal: saldoAwal
+  });
+
+  if (error) return { success: false, message: error.message };
   return { success: true };
 }
 
@@ -154,11 +141,24 @@ export async function updateSaldoAwalPeriode(id: string, nominal: number): Promi
     saveLocal(items);
     return { success: true };
   }
-  const { error } = await client
+  const setup = await ensureUserSetup();
+  if (!setup.success) return { success: false, message: setup.message };
+
+  const { data: active, error: readError } = await client
     .from('periode_pembukuan')
-    .update({ saldo_awal: nominal })
+    .select('id, tahun_ajaran, tanggal_mulai')
     .eq('id', id)
-    .eq('status', 'AKTIF');
+    .eq('status', 'AKTIF')
+    .maybeSingle();
+  if (readError) return { success: false, message: readError.message };
+  if (!active) return { success: false, message: 'Periode aktif tidak ditemukan di database.' };
+
+  const { error } = await client.rpc('save_periode_aktif', {
+    p_periode_id: active.id,
+    p_tahun_ajaran: active.tahun_ajaran,
+    p_tanggal_mulai: active.tanggal_mulai,
+    p_saldo_awal: nominal
+  });
   if (error) return { success: false, message: error.message };
   return { success: true };
 }
@@ -213,26 +213,6 @@ export async function closePeriodePembukuan(
       periodeBerikutnya: mapRow(row.periode_berikutnya)
     }
   };
-}
-
-export async function reopenPeriodePembukuan(id: string): Promise<{ success: boolean; message?: string }> {
-  const client = getSupabaseClient();
-  if (!client) {
-    const items = getLocalPeriodePembukuan();
-    const idx = items.findIndex(x => x.id === id && x.status === 'DITUTUP');
-    if (idx < 0) return { success: false, message: 'Periode tertutup tidak ditemukan.' };
-    if (items.some(x => x.status === 'AKTIF')) {
-      const activeIdx = items.findIndex(x => x.status === 'AKTIF');
-      items.splice(activeIdx, 1);
-    }
-    items[idx] = { ...items[idx], status: 'AKTIF', tanggalAkhir: null, saldoAkhir: null, closedAt: undefined };
-    saveLocal(items);
-    return { success: true };
-  }
-
-  const { error } = await client.rpc('buka_kembali_buku', { p_periode_id: id });
-  if (error) return { success: false, message: error.message };
-  return { success: true };
 }
 
 function nextTahunAjaran(value: string): string {

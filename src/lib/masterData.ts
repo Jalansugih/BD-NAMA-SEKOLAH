@@ -2,11 +2,9 @@ import { getSupabaseClient } from './supabase';
 import { MasterSumberDana } from '../types';
 
 /**
- * Master data disimpan di Supabase dan diisolasi oleh RLS berdasarkan
- * organization_id milik user yang sedang login.
- *
- * organization_id tidak dikirim dari frontend. Database mengisinya otomatis
- * melalui DEFAULT public.get_auth_org_id().
+ * src/lib/masterData.ts
+ * Menjawab poin 8 panduan: Kelas, Sumber Dana, dan Kategori Pengeluaran
+ * disimpan & diubah lewat Supabase, bukan lagi hanya array di React State.
  */
 
 // ---------- MASTER KELAS ----------
@@ -14,10 +12,7 @@ import { MasterSumberDana } from '../types';
 export async function fetchMasterKelas(): Promise<string[] | null> {
   const client = getSupabaseClient();
   if (!client) return null;
-  const { data, error } = await client
-    .from('master_kelas')
-    .select('nama')
-    .order('urutan', { ascending: true });
+  const { data, error } = await client.from('master_kelas').select('nama').order('urutan', { ascending: true });
   if (error || !data) return null;
   return data.map((r: any) => r.nama as string);
 }
@@ -25,9 +20,7 @@ export async function fetchMasterKelas(): Promise<string[] | null> {
 export async function insertMasterKelas(nama: string): Promise<{ success: boolean; message?: string }> {
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
-  const { error } = await client.from('master_kelas').insert([{
-    nama
-  }]);
+  const { error } = await client.from('master_kelas').insert([{ nama }]);
   if (error) return { success: false, message: error.message };
   return { success: true };
 }
@@ -45,10 +38,7 @@ export async function deleteMasterKelas(nama: string): Promise<{ success: boolea
 export async function fetchMasterSumberDana(): Promise<MasterSumberDana[] | null> {
   const client = getSupabaseClient();
   if (!client) return null;
-  const { data, error } = await client
-    .from('master_sumber_dana')
-    .select('*')
-    .order('created_at', { ascending: true });
+  const { data, error } = await client.from('master_sumber_dana').select('*').order('created_at', { ascending: true });
   if (error || !data) return null;
   return data.map((r: any) => ({ id: r.id, name: r.name, subs: r.subs || [] }));
 }
@@ -56,11 +46,7 @@ export async function fetchMasterSumberDana(): Promise<MasterSumberDana[] | null
 export async function insertMasterSumberDana(item: MasterSumberDana): Promise<{ success: boolean; message?: string }> {
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
-  const { error } = await client.from('master_sumber_dana').insert([{
-    id: item.id,
-    name: item.name,
-    subs: item.subs
-  }]);
+  const { error } = await client.from('master_sumber_dana').insert([{ id: item.id, name: item.name, subs: item.subs }]);
   if (error) return { success: false, message: error.message };
   return { success: true };
 }
@@ -78,10 +64,7 @@ export async function deleteMasterSumberDana(id: string): Promise<{ success: boo
 export async function fetchMasterKategori(): Promise<string[] | null> {
   const client = getSupabaseClient();
   if (!client) return null;
-  const { data, error } = await client
-    .from('master_kategori')
-    .select('nama')
-    .order('created_at', { ascending: true });
+  const { data, error } = await client.from('master_kategori').select('nama').order('created_at', { ascending: true });
   if (error || !data) return null;
   return data.map((r: any) => r.nama as string);
 }
@@ -89,9 +72,7 @@ export async function fetchMasterKategori(): Promise<string[] | null> {
 export async function insertMasterKategori(nama: string): Promise<{ success: boolean; message?: string }> {
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
-  const { error } = await client.from('master_kategori').insert([{
-    nama
-  }]);
+  const { error } = await client.from('master_kategori').insert([{ nama }]);
   if (error) return { success: false, message: error.message };
   return { success: true };
 }

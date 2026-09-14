@@ -28,11 +28,14 @@ mendapat ruang data sendiri yang terisolasi dari lembaga lain.
    2. `supabase/migration_periode_pembukuan.sql` — periode pembukuan /
       tutup buku.
    3. `supabase/cutoff_migration.sql` — dukungan tanggal cut-off.
-   4. `supabase/migration_v6_multi_tenant.sql` — **wajib** untuk
-      multi-tenant: menambahkan `organizations`/`profiles`, mengisolasi
-      semua tabel per lembaga lewat Row Level Security, dan memasang
-      trigger yang otomatis membuat lembaga baru untuk setiap akun baru
-      (email/password ATAU Google) yang mendaftar.
+   4. `supabase/migration_v6_multi_tenant.sql` — fondasi multi-tenant.
+   5. `supabase/migration_v7_multi_tenant.sql` — normalisasi schema terbaru
+      ke `organization_id`, RLS tenant-aware, RPC Tutup Buku, dan trigger
+      provisioning dasar.
+   6. `supabase/migration_v8_user_provisioning.sql` — **wajib untuk versi
+      aplikasi ini**. Memastikan user baru/lama memiliki organization,
+      profile, konfigurasi, dan periode aktif; sekaligus memperbaiki RPC
+      pembayaran siswa yang sebelumnya masih memakai `tenant_id`.
 
    Semua file bersifat *additive* dan aman dijalankan ulang (idempotent);
    tidak ada `DROP TABLE`/`DELETE` pada data transaksi.
@@ -113,8 +116,9 @@ Lihat panduan langkah-demi-langkah di chat (Vercel/Netlify + Supabase).
   lain.
 - Jangan pernah commit `.env.local` ke git (sudah ada di `.gitignore`).
 
-## V9 Production Fix — akun baru & RLS
 
-Sebelum deploy, jalankan `supabase/FINAL_PRODUCTION_FIX_V9.sql` sekali. Migration ini memperbaiki bootstrap tenant untuk akun baru dan normalisasi `konfigurasi_lembaga` yang masih memiliki `id` lama.
+## Supabase — Repair Produksi
 
-Setelah itu akun baru wajib memanggil RPC `ensure_my_tenant()` setelah login; frontend release V9 sudah melakukannya.
+Untuk database yang sudah pernah dipakai, gunakan **hanya** `supabase/FINAL_REPAIR_2026_09.sql` sebagai repair/hardening akhir. Script ini menyelaraskan identity chain `auth.users → profiles → organizations → konfigurasi → periode aktif`, RPC transaksi, Storage, dan RLS tanpa menghapus transaksi.
+
+Panduan lengkap ada di `SUPABASE_DEPLOY.md`.

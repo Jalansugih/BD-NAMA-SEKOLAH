@@ -1,18 +1,16 @@
 import { getSupabaseClient } from './supabase';
+import { ensureUserSetup } from './userProvisioning';
 import { SiswaTagihan, Pemasukan } from '../types';
 
 /**
- * Data siswa/tagihan dan pembayaran siswa disimpan di Supabase.
- *
- * Multi-tenant:
- * - organization_id TIDAK berasal dari form/frontend.
- * - Database mengisinya otomatis melalui DEFAULT public.get_auth_org_id().
+ * src/lib/siswa.ts
+ * Menjawab poin 6 & 7 panduan: data siswa/tagihan DAN pembayaran siswa
+ * disimpan lewat Supabase, bukan lagi hanya setSiswaTagihanList/setState.
  */
 
 export async function fetchSiswaTagihan(): Promise<SiswaTagihan[] | null> {
   const client = getSupabaseClient();
   if (!client) return null;
-
   try {
     const { data, error } = await client
       .from('siswa_tagihan')
@@ -20,7 +18,6 @@ export async function fetchSiswaTagihan(): Promise<SiswaTagihan[] | null> {
       .order('created_at', { ascending: false });
 
     if (error || !data) return null;
-
     return data.map((item: any) => ({
       id: item.id,
       nama: item.nama,
@@ -37,64 +34,38 @@ export async function fetchSiswaTagihan(): Promise<SiswaTagihan[] | null> {
 }
 
 export async function insertSiswaTagihan(data: {
-  nama: string;
-  kelas: string;
-  jenis: string;
-  target: number;
-  catatan?: string;
+  nama: string; kelas: string; jenis: string; target: number; catatan?: string;
 }): Promise<{ success: boolean; message?: string }> {
   const client = getSupabaseClient();
-  if (!client) {
-    return { success: false, message: 'Supabase belum terhubung.' };
-  }
+  if (!client) return { success: false, message: 'Supabase belum terhubung.' };
 
-  try {
-    // organization_id ditentukan database berdasarkan user yang sedang login.
-    // Jangan mengirim organization_id dari browser agar tenant tidak dapat dipalsukan.
-    const { error } = await client.from('siswa_tagihan').insert([{
-      nama: data.nama,
-      kelas: data.kelas,
-      jenis: data.jenis,
-      target: data.target,
-      catatan: data.catatan || null
-    }]);
+  const setup = await ensureUserSetup();
+  if (!setup.success) return { success: false, message: setup.message };
 
-    if (error) {
-      return { success: false, message: error.message };
-    }
+  const { error } = await client.from('siswa_tagihan').insert([{
+    nama: data.nama,
+    kelas: data.kelas,
+    jenis: data.jenis,
+    target: data.target,
+    catatan: data.catatan || null
+  }]);
 
-    return { success: true };
-  } catch (err: any) {
-    return {
-      success: false,
-      message: err?.message || 'Gagal menyimpan tagihan siswa.'
-    };
-  }
+  if (error) return { success: false, message: error.message };
+  return { success: true };
 }
 
-export async function deleteSiswaTagihan(
-  id: string
-): Promise<{ success: boolean; message?: string }> {
+export async function deleteSiswaTagihan(id: string): Promise<{ success: boolean; message?: string }> {
   const client = getSupabaseClient();
-  if (!client) {
-    return { success: false, message: 'Supabase belum terhubung.' };
-  }
-
-  const { error } = await client
-    .from('siswa_tagihan')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
-    return { success: false, message: error.message };
-  }
-
+  if (!client) return { success: false, message: 'Supabase belum terhubung.' };
+  const { error } = await client.from('siswa_tagihan').delete().eq('id', id);
+  if (error) return { success: false, message: error.message };
   return { success: true };
 }
 
 /**
- * Catat pembayaran siswa melalui RPC.
- * Validasi siswa + insert pemasukan dilakukan atomic di database.
+ * Catat pembayaran siswa lewat RPC catat_pembayaran_siswa() -- validasi data
+ * siswa & insert ke tabel pemasukan terjadi atomic di server, bukan lagi
+ * hanya menambah ke React State seperti handleSaveBayarSiswa sebelumnya.
  */
 export async function rpcCatatPembayaranSiswa(item: {
   siswaId: string;
@@ -104,35 +75,23 @@ export async function rpcCatatPembayaranSiswa(item: {
   status?: string;
 }): Promise<{ success: boolean; data?: Pemasukan; message?: string }> {
   const client = getSupabaseClient();
-
-  if (!client) {
-    return {
-      success: false,
-      message: 'Supabase client belum dikonfigurasi.'
-    };
-  }
+  if (!client) return { success: false, message: 'Supabase client belum dikonfigurasi.' };
 
   try {
+    const setup = await ensureUserSetup();
+    if (!setup.success) return { success: false, message: setup.message };
+
     const { data, error } = await client.rpc('catat_pembayaran_siswa', {
       p_siswa_id: item.siswaId,
-      p_no_bukti: item.noBukti,
+      p_no_bukti: item.noBukti?.trim() || `BYR-${item.tanggal.replace(/-/g, '')}-${Date.now().toString().slice(-6)}`,
       p_tanggal: item.tanggal,
       p_status: item.status || 'Selesai',
       p_nominal: item.nominal
     });
 
-    if (error) {
-      return {
-        success: false,
-        message: error.message || 'Gagal mencatat pembayaran siswa.'
-      };
-    }
-
+    if (error) return { success: false, message: error.message || 'Gagal mencatat pembayaran siswa.' };
     return { success: true, data };
   } catch (err: any) {
-    return {
-      success: false,
-      message: err?.message || 'Kesalahan koneksi RPC.'
-    };
+    return { success: false, message: err.message || 'Kesalahan koneksi RPC' };
   }
 }

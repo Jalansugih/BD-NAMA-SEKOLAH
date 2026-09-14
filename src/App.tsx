@@ -10,12 +10,12 @@ import {
 } from './data/initialData';
 
 import {
-  testSupabaseConnection, getCurrentSession, ensureMyTenant, onAuthStateChange, signOutSupabase
+  testSupabaseConnection, getCurrentSession, onAuthStateChange, signOutSupabase
 } from './lib/supabase';
 
 import {
   fetchKonfigurasiLembaga, getDefaultConfiguration, saveKonfigurasiLembaga,
-  saveSaldoAwal, uploadLogoToStorage
+  uploadLogoToStorage
 } from './lib/configuration';
 
 import {
@@ -38,6 +38,7 @@ import {
 } from './lib/siswa';
 
 import { fetchAuditLogsFromSupabase } from './lib/audit';
+import { ensureUserSetup } from './lib/userProvisioning';
 import {
   fetchPeriodePembukuan, getActivePeriode, closePeriodePembukuan,
   updateSaldoAwalPeriode, updateTahunAjaranAktif, updatePeriodeAktifSettings, defaultTanggalMulaiTahunAjaran, defaultTanggalAkhirTahunAjaran
@@ -117,11 +118,6 @@ export default function App() {
     }
 
     if (isConnectedToSupabase) {
-      const res = await saveSaldoAwal(nominal);
-      if (!res.success) {
-        showToast(`Gagal menyimpan Kas Awal: ${res.message}`);
-        return;
-      }
       setKonfigurasi(prev => ({ ...prev, saldoAwal: nominal }));
       showToast(`Kas Awal berhasil disimpan ke database: ${formatRupiah(nominal)}`);
     } else {
@@ -160,16 +156,7 @@ export default function App() {
       return;
     }
 
-    if (isConnectedToSupabase) {
-      // Tahun Ajaran sekarang bersumber dari periode_pembukuan.
-      // Jangan menulis tahun_ajaran ke konfigurasi_lembaga karena kolom tersebut
-      // memang tidak ada pada schema database RajaKas saat ini.
-      const saldoRes = await saveSaldoAwal(nominal);
-      if (!saldoRes.success) {
-        showToast(`Periode tersimpan, tetapi Saldo Awal gagal disimpan: ${saldoRes.message}`);
-        return;
-      }
-    }
+    // RPC save_periode_aktif menyimpan periode + saldo secara atomic.
 
     // Muat ulang dari database agar UI menggunakan nilai yang benar-benar tersimpan.
     const refreshedPeriods = await fetchPeriodePembukuan();
@@ -195,14 +182,6 @@ export default function App() {
     if (!/^\d{4}\/\d{4}$/.test(normalized)) {
       showToast('Format Tahun Ajaran harus YYYY/YYYY, contoh 2025/2026');
       return;
-    }
-
-    if (isConnectedToSupabase) {
-      const res = await saveKonfigurasiLembaga({ tahunAjaran: normalized });
-      if (!res.success) {
-        showToast(`Gagal menyimpan Tahun Ajaran: ${res.message}`);
-        return;
-      }
     }
 
     const periodRes = await updateTahunAjaranAktif(normalized);
@@ -259,16 +238,8 @@ export default function App() {
   // Sync / Test Supabase on mount
   useEffect(() => {
     checkAndSyncSupabase();
-    const unsubscribe = onAuthStateChange(async (session) => {
+    const unsubscribe = onAuthStateChange((session) => {
       if (session) {
-        // Wajib bootstrap tenant sebelum query/insert tabel apa pun.
-        // Ini membuat akun baru tetap berfungsi walaupun trigger signup pernah
-        // gagal/tidak terpasang saat akun dibuat.
-        const tenant = await ensureMyTenant();
-        if (!tenant.success) {
-          showToast(`Gagal menyiapkan lembaga: ${tenant.message || 'Tenant belum tersedia.'}`);
-          return;
-        }
         setUserSession({
           id: session.user.id,
           email: session.user.email || '',
@@ -293,18 +264,21 @@ export default function App() {
     if (res.success) {
       const session = await getCurrentSession();
       if (session) {
-        const tenant = await ensureMyTenant();
-        if (!tenant.success) {
-          setUserSession(null);
-          showToast(`Gagal menyiapkan lembaga: ${tenant.message || 'Tenant belum tersedia.'}`);
-          setAuthModalOpen(true);
-          return;
-        }
         setUserSession({
           id: session.user.id,
           email: session.user.email || '',
           role: 'Bendahara Utama'
         });
+
+        // Self-healing fondasi akun: profile -> organization -> konfigurasi
+        // -> periode aktif. Ini wajib sebelum membaca/menulis data transaksi.
+        const setup = await ensureUserSetup();
+        if (!setup.success) {
+          showToast(`Gagal menyiapkan organisasi akun: ${setup.message}`);
+          console.error('[Supabase] ensure_user_setup gagal:', setup.message);
+          setAuthChecked(true);
+          return;
+        }
       } else {
         setUserSession(null);
         setIsAuthModalOpen(true);
@@ -624,9 +598,13 @@ export default function App() {
       // catat_pembayaran_siswa(), bukan hanya menambah ke React State
       // seperti handleSaveBayarSiswa sebelumnya. Setelah reload, pembayaran
       // harus tetap ada.
+      // Nomor bukti wajib selalu terisi. Jika user mengosongkan,
+      // buat nomor bukti otomatis agar RPC tidak ditolak NO_BUKTI_TIDAK_VALID.
+      const noBuktiPembayaran = data.noBukti?.trim() || `BYR-${data.tanggal.replace(/-/g, '')}-${Date.now().toString().slice(-6)}`;
+
       const res = await rpcCatatPembayaranSiswa({
         siswaId: data.siswaId,
-        noBukti: data.noBukti,
+        noBukti: noBuktiPembayaran,
         tanggal: data.tanggal,
         nominal: data.nominal
       });

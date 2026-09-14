@@ -18,6 +18,11 @@ export async function ensureUserSetup(): Promise<{
     return { success: false, message: 'Supabase belum terhubung.' };
   }
 
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  if (sessionError || !sessionData.session?.user) {
+    return { success: false, message: sessionError?.message || 'Sesi login tidak ditemukan.' };
+  }
+
   const { data, error } = await client.rpc('ensure_user_setup');
   if (error) {
     return {

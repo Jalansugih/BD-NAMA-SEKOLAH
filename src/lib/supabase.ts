@@ -22,16 +22,46 @@ export function getSavedSupabaseCredentials(): { url: string; key: string } {
   return { url: finalUrl, key: finalKey };
 }
 
+const DUMMY_SUPABASE_URL = 'https://xyzcompany.supabase.co';
+const DUMMY_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key_for_demo';
+
+function hasRealSupabaseCredentials(): boolean {
+  const { url, key } = getSavedSupabaseCredentials();
+  return Boolean(
+    url &&
+    key &&
+    /^https:\/\/[^\s]+\.supabase\.co(?:\/.*)?$/i.test(url) &&
+    !key.includes('dummy_anon_key_for_demo')
+  );
+}
+
+/**
+ * True when real Supabase credentials are available. This is deliberately
+ * independent of localhost: local development is a supported environment.
+ * The variable is exported (rather than a const) so the configuration modal
+ * can switch the connection at runtime during development.
+ */
+export let isSupabaseConfigured = hasRealSupabaseCredentials();
+
 let supabaseInstance: SupabaseClient | null = null;
 
+function createFallbackClient(): SupabaseClient {
+  return createClient(DUMMY_SUPABASE_URL, DUMMY_SUPABASE_KEY);
+}
+
+/** Non-null client for legacy consumers; calls must still be gated by
+ * `isSupabaseConfigured` when operating in offline/demo mode. */
+export let supabase: SupabaseClient = createFallbackClient();
+
 export function getSupabaseClient(): SupabaseClient | null {
+  if (!hasRealSupabaseCredentials()) return null;
+
   const { url, key } = getSavedSupabaseCredentials();
-  if (!url || !key || url.includes('xyzcompany.supabase.co')) {
-    return null;
-  }
   if (!supabaseInstance) {
     try {
       supabaseInstance = createClient(url, key);
+      supabase = supabaseInstance;
+      isSupabaseConfigured = true;
     } catch (err) {
       console.warn('Failed to initialize Supabase client:', err);
       return null;
@@ -43,15 +73,19 @@ export function getSupabaseClient(): SupabaseClient | null {
 export function resetSupabaseClient(url: string, key: string) {
   localStorage.setItem(STORAGE_KEY_URL, url);
   localStorage.setItem(STORAGE_KEY_KEY, key);
-  if (url && key) {
+  if (url && key && /^https:\/\/[^\s]+\.supabase\.co(?:\/.*)?$/i.test(url)) {
     try {
       supabaseInstance = createClient(url, key);
+      supabase = supabaseInstance;
+      isSupabaseConfigured = true;
+      return;
     } catch (err) {
-      supabaseInstance = null;
+      console.warn('Failed to initialize Supabase client:', err);
     }
-  } else {
-    supabaseInstance = null;
   }
+  supabaseInstance = null;
+  supabase = createFallbackClient();
+  isSupabaseConfigured = false;
 }
 
 export async function testSupabaseConnection(urlInput?: string, keyInput?: string): Promise<{ success: boolean; message: string }> {
@@ -65,18 +99,26 @@ export async function testSupabaseConnection(urlInput?: string, keyInput?: strin
 
   try {
     const testClient = createClient(url, key);
-    // Schema Bendahara hardened menggunakan organization_id.
-    // organization_id juga menjadi sumber isolasi RLS untuk seluruh tenant.
-    const { error } = await testClient.from('konfigurasi_lembaga').select('organization_id').limit(1);
+    // IMPORTANT: localhost bukan Demo Mode. Jika credentials VITE_* valid,
+    // koneksi harus diuji terhadap schema organisasi yang sekarang.
+    // `organization_id` adalah model tenant yang dipakai database terbaru;
+    // `tenant_id` adalah schema legacy dan tidak boleh dijadikan health check.
+    const { error } = await testClient
+      .from('konfigurasi_lembaga')
+      .select('organization_id')
+      .limit(1);
+
     if (error) {
-      if (error.code === 'PGRST116' || (error.message.includes('relation') && error.message.includes('does not exist'))) {
-        return { success: false, message: 'Koneksi Berhasil, tetapi skema tabel belum dibuat! Jalankan SQL Migration secara berurutan: migration.sql -> migration_periode_pembukuan.sql -> cutoff_migration.sql -> migration_v6_multi_tenant.sql (folder supabase/).' };
+      const message = error.message || '';
+      if (error.code === 'PGRST116' || /relation .* does not exist/i.test(message)) {
+        return { success: false, message: 'Supabase terhubung, tetapi tabel konfigurasi_lembaga belum tersedia pada project ini.' };
       }
-      if (error.message.includes('organization_id') && error.message.includes('does not exist')) {
-        return { success: false, message: 'Schema Bendahara belum lengkap: kolom organization_id pada konfigurasi_lembaga belum tersedia.' };
+      if (/organization_id.*does not exist|column .*organization_id.*does not exist/i.test(message)) {
+        return { success: false, message: 'Schema database belum sinkron: konfigurasi_lembaga membutuhkan organization_id.' };
       }
-      return { success: false, message: `Error Supabase: ${error.message}` };
+      return { success: false, message: `Error Supabase: ${message}` };
     }
+
     return { success: true, message: 'Koneksi Supabase Aktif & Terverifikasi!' };
   } catch (err: any) {
     return { success: false, message: `Gagal terkoneksi: ${err.message || 'Error jaringan'}` };
@@ -88,14 +130,6 @@ export async function testSupabaseConnection(urlInput?: string, keyInput?: strin
 // =========================================================================
 
 /** Ambil sesi login saat ini dari Supabase (null jika belum login / belum terhubung). */
-export async function ensureMyTenant(): Promise<{ success: boolean; organizationId?: string; message?: string }> {
-  const client = getSupabaseClient();
-  if (!client) return { success: false, message: 'Supabase belum terhubung.' };
-  const { data, error } = await client.rpc('ensure_my_tenant');
-  if (error) return { success: false, message: error.message };
-  return { success: true, organizationId: data?.organization_id };
-}
-
 export async function getCurrentSession(): Promise<Session | null> {
   const client = getSupabaseClient();
   if (!client) return null;

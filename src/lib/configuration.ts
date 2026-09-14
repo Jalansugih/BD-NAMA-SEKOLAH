@@ -8,7 +8,7 @@ import { KonfigurasiLembaga } from '../types';
  *
  * PENTING (perbaikan multi-tenant): sejak supabase/migration_v6_multi_tenant.sql,
  * tabel `konfigurasi_lembaga` BUKAN LAGI singleton dengan kolom `id BOOLEAN`.
- * Schema Bendahara sekarang menggunakan `organization_id` dan RLS tenant-scoped.
+ * Schema Bendahara sekarang menggunakan `organization_id` dan RLS organization-scoped.
  * Fetch tidak perlu memaksakan organization_id dari browser; database menentukan
  * baris yang boleh dibaca melalui `get_auth_org_id()`.
  * Save memakai RPC server-side agar organization_id tidak dapat dipalsukan oleh client.
@@ -63,27 +63,22 @@ export async function saveKonfigurasiLembaga(
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
 
+  // Kirim seluruh parameter agar PostgREST selalu memilih signature RPC
+  // 10-parameter, termasuk saat patch hanya berisi nama + jenis lembaga.
+  // Nilai undefined di JSON dapat dibuang oleh client dan membuat server
+  // mencari function dengan signature yang lebih pendek.
   const { error } = await client.rpc('save_konfigurasi_lembaga', {
-    p_nama_lembaga: patch.namaLembaga,
-    p_jenis_lembaga: patch.jenisLembaga,
-    p_npsn: patch.npsn,
-    p_alamat: patch.alamat,
-    p_kontak: patch.kontak,
-    p_website: patch.website,
-    p_tahun_ajaran: patch.tahunAjaran
+    p_nama_lembaga: patch.namaLembaga ?? null,
+    p_jenis_lembaga: patch.jenisLembaga ?? null,
+    p_npsn: patch.npsn ?? null,
+    p_alamat: patch.alamat ?? null,
+    p_kontak: patch.kontak ?? null,
+    p_website: patch.website ?? null,
+    p_tahun_ajaran: patch.tahunAjaran ?? null,
+    p_saldo_awal: null,
+    p_logo_url: null,
+    p_clear_logo: false
   });
-  if (error) return { success: false, message: error.message };
-  return { success: true };
-}
-
-export async function saveSaldoAwal(nominal: number): Promise<{ success: boolean; message?: string }> {
-  const client = getSupabaseClient();
-  if (!client) return { success: false, message: 'Supabase belum terhubung.' };
-
-  const { error } = await client.rpc('save_konfigurasi_lembaga', {
-    p_saldo_awal: nominal
-  });
-
   if (error) return { success: false, message: error.message };
   return { success: true };
 }
@@ -92,7 +87,16 @@ export async function saveLogoUrl(url: string | null): Promise<{ success: boolea
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
 
+  // Kirim seluruh signature RPC agar PostgREST tidak jatuh ke overload lama.
   const { error } = await client.rpc('save_konfigurasi_lembaga', {
+    p_nama_lembaga: null,
+    p_jenis_lembaga: null,
+    p_npsn: null,
+    p_alamat: null,
+    p_kontak: null,
+    p_website: null,
+    p_tahun_ajaran: null,
+    p_saldo_awal: null,
     p_logo_url: url,
     p_clear_logo: url === null
   });
@@ -106,30 +110,23 @@ export async function saveLogoUrl(url: string | null): Promise<{ success: boolea
  * ke konfigurasi_lembaga. Poin 10 panduan: produksi TIDAK lagi memakai
  * Base64 di React State sebagai penyimpanan permanen logo.
  *
- * File disimpan di folder organization_id agar sesuai dengan RLS Storage
- * dan tidak bercampur antar organisasi.
+ * Nama file menggunakan user id + timestamp agar file antar user
+ * (multi-tenant) tidak saling menimpa file logo satu sama lain di bucket
+ * Storage yang sama.
  */
 export async function uploadLogoToStorage(file: File): Promise<{ success: boolean; url?: string; message?: string }> {
   const client = getSupabaseClient();
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
 
   try {
-    // Folder Storage WAJIB memakai organization_id karena policy RLS
-    // storage.objects memvalidasi folder pertama terhadap get_auth_org_id().
-    const { data: orgId, error: orgError } = await client.rpc('get_auth_org_id');
-    if (orgError) {
-      return { success: false, message: `Gagal mendapatkan organisasi: ${orgError.message}` };
-    }
-    if (!orgId) {
-      return { success: false, message: 'ORGANISASI_TIDAK_DITEMUKAN: User belum memiliki organisasi.' };
-    }
-
+    const { data: userData } = await client.auth.getUser();
+    const uid = userData?.user?.id || 'anon';
     const ext = file.name.split('.').pop() || 'png';
-    const path = `${orgId}/logo-lembaga.${ext}`;
+    const path = `${uid}/logo-lembaga.${ext}`;
 
     const { error: uploadError } = await client.storage
       .from('logos')
-      .upload(path, file, { upsert: true, cacheControl: '3600' });
+      .upload(path, file, { upsert: true, cacheControl: '3600', contentType: file.type || undefined });
 
     if (uploadError) {
       return { success: false, message: `Gagal upload ke Storage: ${uploadError.message}. Pastikan bucket "logos" sudah dibuat (lihat supabase/migration.sql).` };

@@ -1,4 +1,5 @@
 import { getSupabaseClient } from './supabase';
+import { ensureUserSetup } from './userProvisioning';
 import { Pengeluaran } from '../types';
 
 /**
@@ -50,8 +51,19 @@ export async function uploadBuktiPengeluaranToStorage(
   if (!client) return { success: false, message: 'Supabase belum terhubung.' };
 
   try {
-    const ext = file.name.split('.').pop() || 'jpg';
-    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const setup = await ensureUserSetup();
+    if (!setup.success) return { success: false, message: setup.message };
+
+    const organizationId = setup.organizationId;
+
+if (!organizationId) {
+  return {
+    success: false,
+    message: 'Organisasi akun tidak ditemukan.'
+  };
+}
+
+const path = `${organizationId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${file.type.split('/')[1]}`;
 
     const { error: uploadError } = await client.storage
       .from('bukti-pengeluaran')
@@ -84,6 +96,9 @@ export async function rpcCatatPengeluaran(item: {
   if (!client) return { success: false, message: 'Supabase client belum dikonfigurasi.' };
 
   try {
+    const setup = await ensureUserSetup();
+    if (!setup.success) return { success: false, message: setup.message };
+
     const { data, error } = await client.rpc('catat_pengeluaran', {
       p_no_bukti: item.noBukti,
       p_tanggal: item.tanggal,
