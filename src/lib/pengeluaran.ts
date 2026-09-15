@@ -54,16 +54,11 @@ export async function uploadBuktiPengeluaranToStorage(
     const setup = await ensureUserSetup();
     if (!setup.success) return { success: false, message: setup.message };
 
-    const organizationId = setup.organizationId;
-
-if (!organizationId) {
-  return {
-    success: false,
-    message: 'Organisasi akun tidak ditemukan.'
-  };
-}
-
-const path = `${organizationId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${file.type.split('/')[1]}`;
+    const ext = file.name.split('.').pop() || 'jpg';
+    const { data: userData } = await client.auth.getUser();
+    const owner = userData.user?.id;
+    if (!owner) return { success: false, message: 'Sesi login tidak ditemukan.' };
+    const path = `${owner}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
     const { error: uploadError } = await client.storage
       .from('bukti-pengeluaran')

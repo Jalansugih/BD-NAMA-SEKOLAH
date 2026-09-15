@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Printer, RefreshCw, Upload, Download, FileSpreadsheet } from 'lucide-react';
 import { Pemasukan, Pengeluaran, SiswaTagihan } from '../types';
 
@@ -27,8 +27,49 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
 }) => {
   const [selectedReportType, setSelectedReportType] = useState('Buku Kas Umum (BKU)');
   const [customReportType, setCustomReportType] = useState('');
-  const [reportMonth, setReportMonth] = useState('Agustus 2026');
+  const [reportMonth, setReportMonth] = useState('');
   const [selectedKelas, setSelectedKelas] = useState('Semua Kelas');
+  const [previewVersion, setPreviewVersion] = useState(0);
+
+  // Bulan laporan diambil dari transaksi yang benar-benar tersedia, bukan daftar
+  // bulan hard-coded. Ini membuat dokumen preview selalu mengikuti data berjalan.
+  const reportMonthOptions = useMemo(() => {
+    const months = new Set<string>();
+
+    [...pemasukanList, ...pengeluaranList].forEach(tx => {
+      const value = (tx.tanggal || '').slice(0, 7);
+      if (!/^\\d{4}-\\d{2}$/.test(value)) return;
+
+      const [year, month] = value.split('-').map(Number);
+      const date = new Date(year, month - 1, 1);
+      months.add(date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }));
+    });
+
+    // Jika belum ada transaksi sama sekali, gunakan bulan berjalan sebagai fallback.
+    if (months.size === 0) {
+      const now = new Date();
+      months.add(now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }));
+    }
+
+    return Array.from(months).sort((a, b) => {
+      const parse = (label: string) => {
+        const [monthName, year] = label.split(' ');
+        const monthIndex = [
+          'januari','februari','maret','april','mei','juni',
+          'juli','agustus','september','oktober','november','desember'
+        ].indexOf(monthName.toLowerCase());
+        return new Date(Number(year), monthIndex, 1).getTime();
+      };
+      return parse(b) - parse(a);
+    });
+  }, [pemasukanList, pengeluaranList]);
+
+  // Pilih bulan terbaru hanya sekali saat daftar bulan pertama kali tersedia.
+  React.useEffect(() => {
+    if (!reportMonth && reportMonthOptions.length > 0) {
+      setReportMonth(reportMonthOptions[0]);
+    }
+  }, [reportMonth, reportMonthOptions]);
   const printDate = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
   const reportType = selectedReportType === 'Lainnya' 
@@ -37,10 +78,17 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
 
   // Month mapping to prefix YYYY-MM
   const getMonthPrefix = (label: string) => {
-    if (label.includes('Agustus')) return '2026-08';
-    if (label.includes('Juli')) return '2026-07';
-    if (label.includes('Juni')) return '2026-06';
-    return '2026-08';
+    const parts = label.trim().split(' ');
+    if (parts.length < 2) return '';
+    const monthName = parts.slice(0, -1).join(' ').toLowerCase();
+    const year = Number(parts[parts.length - 1]);
+    const monthIndex = [
+      'januari','februari','maret','april','mei','juni',
+      'juli','agustus','september','oktober','november','desember'
+    ].indexOf(monthName);
+
+    if (monthIndex < 0 || !Number.isFinite(year)) return '';
+    return `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
   };
 
   const periodPrefix = getMonthPrefix(reportMonth);
@@ -333,16 +381,18 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
             onChange={(e) => setReportMonth(e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 rounded-[14px] px-3 py-2 text-xs font-medium text-slate-800 outline-none focus:border-blue-500"
           >
-            <option value="Agustus 2026">Agustus 2026</option>
-            <option value="Juli 2026">Juli 2026</option>
-            <option value="Juni 2026">Juni 2026</option>
+            {reportMonthOptions.map(month => (
+              <option key={month} value={month}>{month}</option>
+            ))}
           </select>
         </div>
 
         <div className="flex items-end">
           <button 
-            onClick={() => {}}
+            type="button"
+            onClick={() => setPreviewVersion(v => v + 1)}
             className="w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-[14px] text-xs font-semibold border border-blue-200 transition-all flex items-center justify-center gap-1.5"
+            title="Terapkan pilihan jenis laporan, kelas, dan periode ke dokumen preview"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Perbarui Preview Laporan</span>
@@ -352,7 +402,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
 
       {/* REALTIME A4 PRINT PREVIEW CANVAS */}
       <div className="print-preview-wrapper bg-slate-300/60 p-6 md:p-10 rounded-[14px] border border-slate-300 overflow-x-auto flex justify-center">
-        <div id="printable-report" className="bg-white w-[210mm] min-h-[297mm] p-12 shadow-2xl text-slate-900 text-xs font-sans relative flex flex-col justify-between">
+        <div key={previewVersion} id="printable-report" className="bg-white w-[210mm] min-h-[297mm] p-12 shadow-2xl text-slate-900 text-xs font-sans relative flex flex-col justify-between">
           <div>
             {/* Official Header Kop Sekolah */}
             <div className="print-kop-surat flex items-center gap-4 pb-4 border-b-2 border-slate-900 mb-6">
@@ -478,18 +528,18 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
               <div className="print-signature-col">
                 <p className="text-slate-600">Mengetahui,</p>
                 <p className="font-bold text-slate-900 mb-16">Kepala Sekolah {currentLembaga}</p>
-                <p className="font-bold text-slate-900 underline">H. Fahru Rozi Ramdhan S.S., M.Pd</p>
+                <p className="font-bold text-slate-900 underline">Nama Kepala Sekolah/Madrasah</p>
                 <p className="text-[10px] text-slate-500">NIP. .........................................</p>
               </div>
               <div className="print-signature-col">
                 <p className="text-slate-600">Cianjur, {printDate}</p>
                 <p className="font-bold text-slate-900 mb-16">Bendahara Sekolah</p>
-                <p className="font-bold text-slate-900 underline">Rizki Mulyana, S.Pd</p>
+                <p className="font-bold text-slate-900 underline">Nama Bendahara Sekolah</p>
                 <p className="text-[10px] text-slate-500">NIP. .........................................</p>
               </div>
             </div>
             <div className="mt-8 text-[9px] text-slate-400 text-center border-t border-slate-100 pt-2 font-mono">
-              Dokumen ini dicetak secara otomatis dari Portal Bendahara SMP Tungturunan • Yang Terintegrasi
+              Dokumen ini dicetak secara otomatis dari Portal Bendahara Rajakas.ID • Yang Terintegrasi
             </div>
           </div>
         </div>
