@@ -16,14 +16,13 @@ export function getSavedSupabaseCredentials(): { url: string; key: string } {
   const localUrl = envUrl || localStorage.getItem(STORAGE_KEY_URL) || '';
   const localKey = envKey || localStorage.getItem(STORAGE_KEY_KEY) || '';
 
-  const finalUrl = localUrl || 'https://xyzcompany.supabase.co';
-  const finalKey = localKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key_for_demo';
-
-  return { url: finalUrl, key: finalKey };
+  return { url: localUrl, key: localKey };
 }
 
-const DUMMY_SUPABASE_URL = 'https://xyzcompany.supabase.co';
-const DUMMY_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key_for_demo';
+// Fallback hanya untuk kompatibilitas tipe; seluruh operasi produksi wajib
+// melewati getSupabaseClient() dan isSupabaseConfigured.
+const FALLBACK_SUPABASE_URL = 'http://localhost:54321';
+const FALLBACK_SUPABASE_KEY = 'local-development-only';
 
 function hasRealSupabaseCredentials(): boolean {
   const { url, key } = getSavedSupabaseCredentials();
@@ -46,7 +45,7 @@ export let isSupabaseConfigured = hasRealSupabaseCredentials();
 let supabaseInstance: SupabaseClient | null = null;
 
 function createFallbackClient(): SupabaseClient {
-  return createClient(DUMMY_SUPABASE_URL, DUMMY_SUPABASE_KEY);
+  return createClient(FALLBACK_SUPABASE_URL, FALLBACK_SUPABASE_KEY);
 }
 
 /** Non-null client for legacy consumers; calls must still be gated by

@@ -30,31 +30,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   formatRupiah,
   onSwitchTab
 }) => {
-  const currentPeriod = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-  const currentMonthIdx = new Date().getMonth();
-  const currentMonthName = NAMA_BULAN[currentMonthIdx];
+  // Dashboard mengikuti PERIODE PEMBUKUAN aktif yang dikirim App.tsx.
+  // Jadi seluruh angka keuangan di sini berasal dari transaksi yang benar-benar
+  // berada dalam periode aktif, bukan dari bulan kalender yang kebetulan sedang berjalan.
+  const currentPeriod = new Date().toISOString().slice(0, 7);
 
-  // Total Kas overall
-  const totalInAll = pemasukanList.reduce((acc, curr) => acc + curr.nominal, 0);
-  const totalOutAll = pengeluaranList.reduce((acc, curr) => acc + curr.nominal, 0);
-  const totalSaldoKas = saldoAwal + totalInAll - totalOutAll;
+  // Rumus inti kas:
+  // Saldo Kas = Saldo Awal Periode + Total Pemasukan - Total Pengeluaran
+  const totalInPeriod = pemasukanList.reduce((acc, curr) => acc + Number(curr.nominal || 0), 0);
+  const totalOutPeriod = pengeluaranList.reduce((acc, curr) => acc + Number(curr.nominal || 0), 0);
+  const surplusPeriod = totalInPeriod - totalOutPeriod;
+  const totalSaldoKas = saldoAwal + surplusPeriod;
 
-  // Monthly breakdown
-  const totalInBulan = pemasukanList
-    .filter(x => x.tanggal && x.tanggal.startsWith(currentPeriod))
-    .reduce((acc, curr) => acc + curr.nominal, 0);
-
-  const totalOutBulan = pengeluaranList
-    .filter(x => x.tanggal && x.tanggal.startsWith(currentPeriod))
-    .reduce((acc, curr) => acc + curr.nominal, 0);
-
-  const surplusBulan = totalInBulan - totalOutBulan;
-
-  // Trend
-  const saldoAwalBulanIni = totalSaldoKas - surplusBulan;
+  // Angka bulan kalender tetap dipakai hanya untuk grafik 6 bulan, bukan sebagai dasar saldo.
+  // Saldo awal riil periode = saldo akhir saat ini - surplus periode.
+  const saldoAwalPeriode = totalSaldoKas - surplusPeriod;
   let trendPct = 0;
-  if (saldoAwalBulanIni > 0) {
-    trendPct = (surplusBulan / saldoAwalBulanIni) * 100;
+  if (saldoAwalPeriode !== 0) {
+    trendPct = (surplusPeriod / Math.abs(saldoAwalPeriode)) * 100;
   }
 
   // Chart 6 months data
@@ -83,7 +76,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Source Composition
   const perSumber: Record<string, number> = {};
   pemasukanList
-    .filter(x => x.tanggal && x.tanggal.startsWith(currentPeriod))
     .forEach(x => {
       perSumber[x.sumber] = (perSumber[x.sumber] || 0) + x.nominal;
     });
@@ -140,56 +132,56 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <div className={`mt-3 flex items-center text-[11px] font-medium ${trendPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
             {trendPct >= 0 ? <TrendingUp className="w-3.5 h-3.5 mr-1" /> : <TrendingDown className="w-3.5 h-3.5 mr-1" />}
-            <span>{trendPct >= 0 ? '+' : ''}{trendPct.toFixed(1)}% dari saldo awal bulan</span>
+            <span>{trendPct >= 0 ? '+' : ''}{trendPct.toFixed(1)}% terhadap saldo awal periode</span>
           </div>
         </div>
 
-        {/* Card 2: Pemasukan Bulan Ini */}
+        {/* Card 2: Total Pemasukan Periode */}
         <div className="bg-white p-5 rounded-[14px] border border-slate-200/90 shadow-sm hover:shadow-md transition-all group">
           <div className="flex items-center justify-between text-slate-500 mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider">Pemasukan ({currentMonthName})</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Total Pemasukan</span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
               <ArrowDownCircle className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-bold text-emerald-600 tracking-tight">
-            {formatRupiah(totalInBulan)}
+            {formatRupiah(totalInPeriod)}
           </div>
           <div className="mt-3 flex items-center text-[11px] text-slate-500">
-            <span>Dari BOS, SPP, & Infak</span>
+            <span>Seluruh pemasukan dalam periode aktif</span>
           </div>
         </div>
 
-        {/* Card 3: Pengeluaran Bulan Ini */}
+        {/* Card 3: Total Pengeluaran Periode */}
         <div className="bg-white p-5 rounded-[14px] border border-slate-200/90 shadow-sm hover:shadow-md transition-all group">
           <div className="flex items-center justify-between text-slate-500 mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider">Pengeluaran ({currentMonthName})</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Total Pengeluaran</span>
             <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-110 transition-transform">
               <ArrowUpCircle className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-bold text-rose-600 tracking-tight">
-            {formatRupiah(totalOutBulan)}
+            {formatRupiah(totalOutPeriod)}
           </div>
           <div className="mt-3 flex items-center text-[11px] text-slate-500">
-            <span>Honor, Operasional & ATK</span>
+            <span>Seluruh pengeluaran dalam periode aktif</span>
           </div>
         </div>
 
-        {/* Card 4: Surplus Bulan Ini */}
+        {/* Card 4: Surplus / Defisit Periode */}
         <div className="bg-white p-5 rounded-[14px] border border-slate-200/90 shadow-sm hover:shadow-md transition-all group">
           <div className="flex items-center justify-between text-slate-500 mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider">Surplus Bulan Ini</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Surplus / Defisit</span>
             <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Scale className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl font-bold text-slate-900 tracking-tight">
-            {surplusBulan >= 0 ? '+ ' : '- '}{formatRupiah(Math.abs(surplusBulan))}
+            {surplusPeriod >= 0 ? '+ ' : '- '}{formatRupiah(Math.abs(surplusPeriod))}
           </div>
-          <div className="mt-3 flex items-center text-[11px] text-emerald-600 font-medium">
-            <ShieldCheck className="w-3.5 h-3.5 mr-1" />
-            <span>Arus Kas Sehat</span>
+          <div className={`mt-3 flex items-center text-[11px] font-medium ${surplusPeriod >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {surplusPeriod >= 0 ? <ShieldCheck className="w-3.5 h-3.5 mr-1" /> : <TrendingDown className="w-3.5 h-3.5 mr-1" />}
+            <span>{surplusPeriod >= 0 ? 'Surplus kas' : 'Defisit kas'}</span>
           </div>
         </div>
       </div>
@@ -247,14 +239,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="bg-white p-6 rounded-[14px] border border-slate-200/90 shadow-sm flex flex-col justify-between">
           <div>
             <h3 className="font-bold text-slate-900 text-base mb-1">Sumber Pemasukan Utama</h3>
-            <p className="text-xs text-slate-500 mb-6">Komposisi penerimaan dana bulan {currentMonthName}</p>
+            <p className="text-xs text-slate-500 mb-6">Komposisi penerimaan dana periode aktif</p>
 
             {compositionEntries.length === 0 ? (
               <p className="text-xs text-slate-400 italic">Belum ada pemasukan tercatat bulan ini.</p>
             ) : (
               <div className="space-y-4">
                 {compositionEntries.map((e, idx) => {
-                  const pct = totalInBulan > 0 ? Math.round((e.nominal / totalInBulan) * 100) : 0;
+                  const pct = totalInPeriod > 0 ? Math.round((e.nominal / totalInPeriod) * 100) : 0;
                   return (
                     <div key={e.name}>
                       <div className="flex justify-between text-xs font-semibold mb-1">
