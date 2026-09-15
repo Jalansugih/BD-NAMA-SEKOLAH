@@ -122,3 +122,7 @@ Lihat panduan langkah-demi-langkah di chat (Vercel/Netlify + Supabase).
 Untuk database yang sudah pernah dipakai, gunakan **hanya** `supabase/FINAL_REPAIR_2026_09.sql` sebagai repair/hardening akhir. Script ini menyelaraskan identity chain `auth.users → profiles → organizations → konfigurasi → periode aktif`, RPC transaksi, Storage, dan RLS tanpa menghapus transaksi.
 
 Panduan lengkap ada di `SUPABASE_DEPLOY.md`.
+
+
+### Perbaikan upload bukti pengeluaran (multi-tenant)
+Jika upload nota menghasilkan `new row violates row-level security policy`, jalankan `supabase/patch_storage_bukti_pengeluaran_multitenant.sql` sekali di Supabase SQL Editor. Versi ini menyamakan path Storage dengan `organization_id` yang digunakan RLS.

@@ -19,6 +19,7 @@ export const PengeluaranView: React.FC<PengeluaranViewProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [filterKat, setFilterKat] = useState('ALL');
+  const [selectedBukti, setSelectedBukti] = useState<Pengeluaran | null>(null);
 
   const filtered = pengeluaranList.filter(item => {
     const matchSearch = item.keterangan.toLowerCase().includes(search.toLowerCase()) ||
@@ -109,7 +110,15 @@ export const PengeluaranView: React.FC<PengeluaranViewProps> = ({
                       {formatRupiah(item.nominal)}
                     </td>
                     <td className="p-4 text-center">
-                      <Receipt className="w-4 h-4 text-slate-400 hover:text-blue-600 cursor-pointer inline" />
+                      <button
+                        type="button"
+                        onClick={() => item.buktiUrl && setSelectedBukti(item)}
+                        disabled={!item.buktiUrl}
+                        title={item.buktiUrl ? 'Lihat bukti nota' : 'Tidak ada bukti nota'}
+                        className={`inline-flex items-center justify-center rounded-lg p-2 transition-colors ${item.buktiUrl ? 'text-slate-500 hover:bg-blue-50 hover:text-blue-600 cursor-pointer' : 'text-slate-300 cursor-not-allowed'}`}
+                      >
+                        <Receipt className="w-4 h-4" />
+                      </button>
                     </td>
                     <td className="p-4 text-center">
                       <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-50 text-emerald-700 font-bold">
@@ -132,6 +141,22 @@ export const PengeluaranView: React.FC<PengeluaranViewProps> = ({
           </table>
         </div>
       </div>
+
+      {selectedBukti?.buktiUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Pratinjau bukti nota"
+          onClick={() => setSelectedBukti(null)}
+        >
+          <div className="relative max-h-[90vh] max-w-4xl rounded-2xl bg-white p-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setSelectedBukti(null)} className="absolute right-3 top-3 rounded-full bg-slate-900/70 px-3 py-1 text-lg text-white hover:bg-slate-900" aria-label="Tutup pratinjau">×</button>
+            <img src={selectedBukti.buktiUrl} alt={`Bukti nota ${selectedBukti.noBukti}`} className="max-h-[82vh] max-w-full rounded-xl object-contain" />
+            <p className="px-2 pt-2 text-center text-xs text-slate-500">{selectedBukti.noBukti} · {selectedBukti.keterangan}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

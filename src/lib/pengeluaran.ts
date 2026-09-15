@@ -58,7 +58,13 @@ export async function uploadBuktiPengeluaranToStorage(
     const { data: userData } = await client.auth.getUser();
     const owner = userData.user?.id;
     if (!owner) return { success: false, message: 'Sesi login tidak ditemukan.' };
-    const path = `${owner}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+    // Storage bukti menggunakan folder organisasi, bukan user, agar konsisten
+    // dengan RLS multi-tenant dan bukti dapat dikelola lintas role dalam org.
+    if (!setup.organizationId) {
+      return { success: false, message: 'Organisasi akun tidak ditemukan.' };
+    }
+    const path = `${setup.organizationId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
     const { error: uploadError } = await client.storage
       .from('bukti-pengeluaran')
