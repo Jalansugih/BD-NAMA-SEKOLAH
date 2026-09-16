@@ -15,7 +15,7 @@ import {
 
 import {
   fetchKonfigurasiLembaga, getDefaultConfiguration, saveKonfigurasiLembaga,
-  uploadLogoToStorage
+  uploadLogoToStorage, saveLogoUrl
 } from './lib/configuration';
 
 import {
@@ -61,6 +61,11 @@ import {
   ModalBlueprint
 } from './components/Modals';
 
+// Mode Demo Lokal HANYA boleh hidup saat `npm run dev`. Di build produksi,
+// kegagalan koneksi Supabase WAJIB memunculkan layar error -- bukan sesi palsu
+// dengan data contoh, karena bendahara bisa mengira transaksinya tersimpan.
+const ALLOW_DEMO_MODE = import.meta.env.DEV;
+
 export default function App() {
   // Navigation & UI State
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -87,6 +92,7 @@ export default function App() {
   const [userSession, setUserSession] = useState<UserSession | null>(null);
   const [isConnectedToSupabase, setIsConnectedToSupabase] = useState<boolean>(false);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   // Modals visibility
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -258,6 +264,7 @@ export default function App() {
   // -> siswa/tagihan -> audit. Dashboard TIDAK dirender sebelum semua ini
   // selesai (lihat gate `!authChecked` di bagian render bawah).
   const checkAndSyncSupabase = async () => {
+    setConnectionError(null);
     const res = await testSupabaseConnection();
     setIsConnectedToSupabase(res.success);
 
@@ -310,6 +317,15 @@ export default function App() {
       // dipakai DI SINI, khusus untuk demo (poin 4 panduan), tidak pernah
       // dipakai sebagai fallback diam-diam saat mode produksi gagal konek.
       console.error('[Supabase] Gagal terhubung:', res.message);
+
+      if (!ALLOW_DEMO_MODE) {
+        // PRODUKSI: berhenti di sini. Tidak ada sesi palsu, tidak ada data contoh.
+        setConnectionError(res.message || 'Koneksi ke database gagal.');
+        setUserSession(null);
+        setAuthChecked(true);
+        return;
+      }
+
       showToast(`Supabase belum terhubung: ${res.message}`);
       setUserSession({
         id: 'demo_local',
@@ -685,20 +701,45 @@ export default function App() {
 
   // Profil lembaga -- poin 9 panduan: UPDATE ke Supabase, status "berhasil"
   // hanya ditampilkan SETELAH database mengonfirmasi.
-  const handleUpdateLembaga = async (nama: string, jenis: string) => {
+  const handleUpdateLembaga = async (data: {
+    nama: string; jenis: string; npsn: string; alamat: string; kontak: string; website: string;
+  }) => {
     if (isConnectedToSupabase) {
-      const res = await saveKonfigurasiLembaga({ namaLembaga: nama, jenisLembaga: jenis });
+      const res = await saveKonfigurasiLembaga({
+        namaLembaga: data.nama,
+        jenisLembaga: data.jenis,
+        npsn: data.npsn,
+        alamat: data.alamat,
+        kontak: data.kontak,
+        website: data.website
+      });
       if (!res.success) {
         showToast(`Gagal menyimpan profil lembaga: ${res.message}`);
         return;
       }
-      setKonfigurasi(prev => ({ ...prev, namaLembaga: nama, jenisLembaga: jenis }));
+      setKonfigurasi(prev => ({
+        ...prev,
+        namaLembaga: data.nama,
+        jenisLembaga: data.jenis,
+        npsn: data.npsn,
+        alamat: data.alamat,
+        kontak: data.kontak,
+        website: data.website
+      }));
       refreshAuditLogs();
       showToast('Profil lembaga berhasil disimpan ke database');
       return;
     }
 
-    setKonfigurasi(prev => ({ ...prev, namaLembaga: nama, jenisLembaga: jenis }));
+    setKonfigurasi(prev => ({
+      ...prev,
+      namaLembaga: data.nama,
+      jenisLembaga: data.jenis,
+      npsn: data.npsn,
+      alamat: data.alamat,
+      kontak: data.kontak,
+      website: data.website
+    }));
     showToast('[Demo Lokal] Profil lembaga diperbarui sementara');
   };
 
@@ -830,6 +871,36 @@ export default function App() {
     );
   }
 
+  // GERBANG KONEKSI (produksi): database tidak terjangkau -> jangan render
+  // apa pun yang menyerupai data keuangan.
+  if (connectionError) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#FAFAFC] p-6">
+        <div className="max-w-md w-full rounded-2xl bg-white border border-slate-200 shadow-sm p-7 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-600 text-2xl font-bold">!</div>
+          <h1 className="text-base font-bold text-slate-900">Tidak dapat terhubung ke database</h1>
+          <p className="mt-2 text-xs leading-relaxed text-slate-600">
+            Aplikasi tidak dapat menghubungi server Supabase, jadi data keuangan tidak
+            ditampilkan untuk mencegah kekeliruan. Tidak ada transaksi yang hilang.
+          </p>
+          <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-[11px] font-mono text-slate-500 break-words">
+            {connectionError}
+          </p>
+          <button
+            type="button"
+            onClick={() => { setAuthChecked(false); checkAndSyncSupabase(); }}
+            className="mt-5 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white hover:bg-slate-800"
+          >
+            Coba Hubungkan Lagi
+          </button>
+          <p className="mt-3 text-[10px] text-slate-400">
+            Jika berulang, periksa VITE_SUPABASE_URL &amp; VITE_SUPABASE_ANON_KEY di pengaturan deployment.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // GERBANG LOGIN: kalau terhubung ke Supabase (mode produksi sungguhan) tapi
   // belum ada sesi yang valid, jangan render app/data sama sekali -- hanya
   // tampilkan layar login penuh (LoginPage), bukan lagi modal kecil.
@@ -898,7 +969,7 @@ export default function App() {
           currentLembaga={currentLembaga}
           tahunAjaran={tahunAjaran}
           onSelectLembaga={(nama, jenis) => {
-            handleUpdateLembaga(nama, jenis);
+            handleUpdateLembaga({ nama, jenis, npsn: konfigurasi.npsn || '', alamat: konfigurasi.alamat || '', kontak: konfigurasi.kontak || '', website: konfigurasi.website || '' });
           }}
           onOpenPemasukanModal={() => setIsPemasukanModalOpen(true)}
           onOpenPengeluaranModal={() => setIsPengeluaranModalOpen(true)}
@@ -981,6 +1052,10 @@ export default function App() {
               pemasukanList={pemasukanList}
               pengeluaranList={pengeluaranList}
               currentLembaga={currentLembaga}
+              npsn={konfigurasi.npsn || ''}
+              alamat={konfigurasi.alamat || ''}
+              kontak={konfigurasi.kontak || ''}
+              website={konfigurasi.website || ''}
               logoDataUrl={logoDataUrl}
               saldoAwal={saldoAwal}
               formatRupiah={formatRupiah}
@@ -994,6 +1069,10 @@ export default function App() {
             <PengaturanView
               currentLembaga={currentLembaga}
               jenisLembaga={jenisLembaga}
+              npsn={konfigurasi.npsn || ''}
+              alamat={konfigurasi.alamat || ''}
+              kontak={konfigurasi.kontak || ''}
+              website={konfigurasi.website || ''}
               logoDataUrl={logoDataUrl}
               masterKelas={masterKelas}
               masterSumberDana={masterSumberDana}
@@ -1006,7 +1085,12 @@ export default function App() {
               periodeAktifStatus={activePeriode?.status || null}
               onUpdateLembaga={handleUpdateLembaga}
               onLogoUpload={handleLogoUpload}
-              onRemoveLogo={() => setKonfigurasi(prev => ({ ...prev, logoUrl: null }))}
+              onRemoveLogo={async () => {
+                const result = await saveLogoUrl(null);
+                if (!result.success) { showToast(result.message || 'Gagal menghapus logo'); return; }
+                setKonfigurasi(prev => ({ ...prev, logoUrl: null }));
+                showToast('Logo lembaga dihapus');
+              }}
               onOpenWizard={() => showToast('Menjalankan Setup Wizard...')}
               onAddMasterKelas={handleAddMasterKelas}
               onRemoveMasterKelas={handleRemoveMasterKelas}

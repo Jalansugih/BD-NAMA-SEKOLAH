@@ -6,6 +6,18 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    build: {
+      // Pisahkan library berat agar bundle utama tidak lagi > 1 MB dalam satu
+      // file. Chart & animasi jarang berubah sehingga cache browser awet.
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            supabase: ['@supabase/supabase-js'],
+            charts: ['recharts']
+          }
+        }
+      }
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

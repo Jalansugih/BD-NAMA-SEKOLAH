@@ -6,6 +6,10 @@ interface LaporanViewProps {
   pemasukanList: Pemasukan[];
   pengeluaranList: Pengeluaran[];
   currentLembaga: string;
+  npsn: string;
+  alamat: string;
+  kontak: string;
+  website: string;
   logoDataUrl: string | null;
   saldoAwal: number;
   formatRupiah: (val: number) => string;
@@ -18,6 +22,10 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
   pemasukanList,
   pengeluaranList,
   currentLembaga,
+  npsn,
+  alamat,
+  kontak,
+  website,
   logoDataUrl,
   saldoAwal,
   formatRupiah,
@@ -38,7 +46,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
 
     [...pemasukanList, ...pengeluaranList].forEach(tx => {
       const value = (tx.tanggal || '').slice(0, 7);
-      if (!/^\\d{4}-\\d{2}$/.test(value)) return;
+      if (!/^\d{4}-\d{2}$/.test(value)) return;
 
       const [year, month] = value.split('-').map(Number);
       const date = new Date(year, month - 1, 1);
@@ -416,8 +424,21 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
               </label>
               <div className="flex-1 text-center">
                 <h2 className="text-base font-bold uppercase tracking-wide text-slate-900">{currentLembaga}</h2>
-                <p className="text-[11px] text-slate-600">Kp. Selajambe Rt/Rw : 04/05 Desa Hegarmanah, Kec. Sukaluyu, Cianjur 43284 Telp. 0263-2324180</p>
-                <p className="text-[10px] text-slate-500 font-mono mt-0.5">Email: smp.tungturunan@gmail.com | NPSN: 20252330</p>
+                {(alamat || kontak) && (
+                  <p className="text-[11px] text-slate-600">
+                    {[alamat, kontak].filter(Boolean).join(' \u00b7 Telp/Email: ')}
+                  </p>
+                )}
+                {(npsn || website) && (
+                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                    {[npsn ? `NPSN: ${npsn}` : null, website || null].filter(Boolean).join(' | ')}
+                  </p>
+                )}
+                {!alamat && !kontak && !npsn && !website && (
+                  <p className="text-[11px] text-slate-400 italic">
+                    Alamat &amp; kontak belum diisi -- lengkapi di menu Pengaturan
+                  </p>
+                )}
               </div>
             </div>
 

@@ -69,27 +69,6 @@ Impor diperbaiki, dan gerbangnya dipasang (lihat di bawah).
 
 ---
 
-### 4. Kop surat laporan tidak bisa diisi (alamat, NPSN, kontak, website)
-`konfigurasi_lembaga` sudah punya kolom `npsn`, `alamat`, `kontak`, `website`,
-dan RPC `save_konfigurasi_lembaga` sudah menerimanya sejak lama — tapi
-**tidak ada satu pun input field di menu Pengaturan** untuk mengisinya, dan
-`LaporanView` tidak pernah menerima nilainya sebagai prop. Makanya kop surat
-cuma bisa menampilkan nama lembaga.
-
-Sekarang:
-- Pengaturan → Profil & Identitas Lembaga punya 4 field baru: NPSN, Kontak,
-  Alamat, Website.
-- `onUpdateLembaga` mengirim semuanya sekaligus ke `saveKonfigurasiLembaga`.
-- `LaporanView` menyusun kop otomatis: baris kedua dari alamat + kontak,
-  baris ketiga dari NPSN + website. Kalau semua kosong, muncul petunjuk
-  "lengkapi di menu Pengaturan" alih-alih kop kosong yang membingungkan.
-
-**Tindakan Anda:** buka Pengaturan → isi field barunya → Simpan Profil. Kop
-surat di semua laporan akan otomatis terisi, tidak perlu ubah kode lagi
-untuk sekolah berikutnya.
-
----
-
 ## ⚠️ Yang SENGAJA belum diubah
 
 **Bucket `bukti-pengeluaran` masih publik.** Patch multi-tenant sebelumnya

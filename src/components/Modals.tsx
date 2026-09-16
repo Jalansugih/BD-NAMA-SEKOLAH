@@ -734,6 +734,7 @@ export const ModalSiswaBayarPropsModal: React.FC<ModalSiswaBayarProps> = ({
               type="number" 
               required
               min="1"
+              max={String(sisa)}
               value={nominal}
               onChange={(e) => setNominal(e.target.value)}
               placeholder={`Maks ${formatRupiah(sisa)}`} 

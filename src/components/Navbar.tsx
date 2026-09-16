@@ -32,11 +32,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const lembagaOptions = [
-    { nama: 'SD Negeri 1 Merdeka', jenis: 'SD' },
-    { nama: 'SMP Tungturunan', jenis: 'SMP' },
-    { nama: 'Yayasan Pendidikan Nusantara', jenis: 'Yayasan' }
-  ];
+  // Daftar lembaga tidak lagi di-hardcode; lembaga aktif berasal dari sesi organisasi.
+
 
   return (
     <header className="h-16 bg-white border-b border-slate-200/80 px-4 md:px-8 flex items-center justify-between shrink-0 z-10 gap-2">

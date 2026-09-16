@@ -20,25 +20,13 @@ mendapat ruang data sendiri yang terisolasi dari lembaga lain.
 
 1. Daftar gratis di https://supabase.com dan buat project baru (region
    Singapore paling dekat untuk pengguna Indonesia).
-2. Buka **SQL Editor** di dashboard Supabase dan jalankan file-file di
-   folder `supabase/` **SECARA BERURUTAN** (klik Run untuk masing-masing,
-   satu per satu, dari atas ke bawah):
-   1. `supabase/migration.sql` — skema dasar (tabel, trigger validasi
-      saldo, audit log, RLS awal).
-   2. `supabase/migration_periode_pembukuan.sql` — periode pembukuan /
-      tutup buku.
-   3. `supabase/cutoff_migration.sql` — dukungan tanggal cut-off.
-   4. `supabase/migration_v6_multi_tenant.sql` — fondasi multi-tenant.
-   5. `supabase/migration_v7_multi_tenant.sql` — normalisasi schema terbaru
-      ke `organization_id`, RLS tenant-aware, RPC Tutup Buku, dan trigger
-      provisioning dasar.
-   6. `supabase/migration_v8_user_provisioning.sql` — **wajib untuk versi
-      aplikasi ini**. Memastikan user baru/lama memiliki organization,
-      profile, konfigurasi, dan periode aktif; sekaligus memperbaiki RPC
-      pembayaran siswa yang sebelumnya masih memakai `tenant_id`.
+2. Buka **SQL Editor** di dashboard Supabase dan jalankan script pada
+   folder `supabase/` **berurutan sesuai tabel di `SUPABASE_DEPLOY.md`**
+   (9 langkah untuk database baru, 3 langkah untuk database yang sudah
+   dipakai). Jangan menjalankan apa pun dari `supabase/archive/`.
 
-   Semua file bersifat *additive* dan aman dijalankan ulang (idempotent);
-   tidak ada `DROP TABLE`/`DELETE` pada data transaksi.
+   Langkah `PATCH_V28_SALDO_KAS_GUARD.sql` bersifat **wajib** — tanpa itu
+   validasi saldo kas di level database tidak aktif.
 
 3. Buka **Project Settings > API**, salin **Project URL** dan **anon public
    key**, masukkan ke `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`.
@@ -105,8 +93,9 @@ Lihat panduan langkah-demi-langkah di chat (Vercel/Netlify + Supabase).
   lembaga hanya bisa membaca/menulis datanya sendiri
   (`organization_id = get_auth_org_id()`), bukan sekadar "siapapun yang
   login" seperti pada versi single-tenant awal.
-- Validasi saldo kas dan audit log berjalan di level database (trigger),
-  bukan cuma di frontend, jadi tidak bisa dilewati.
+- Validasi saldo kas dan audit log berjalan di level database (trigger +
+  RPC), bukan cuma di frontend, jadi tidak bisa dilewati. Ini dipulihkan
+  oleh `supabase/PATCH_V28_SALDO_KAS_GUARD.sql` — pastikan sudah dijalankan.
 - Fungsi `tutup_buku`/`buka_kembali_periode`/`hitung_saldo_akhir_periode`
   memfilter `organization_id` secara eksplisit di dalam kode SQL-nya
   sendiri (bukan hanya mengandalkan RLS), karena fungsi-fungsi ini berjalan

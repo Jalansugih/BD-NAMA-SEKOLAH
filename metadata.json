@@ -1,6 +1,4 @@
 {
-  "name": "RajaKas.id - Smart Financial Management for Education",
-  "description": "Modul Bendahara RajaKas.id terintegrasi Supabase dengan Auth, Triggers, RPC catat_pengeluaran, Validasi Saldo Kas Server-Side, dan Audit Log.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "RajaKas.id — Modul Bendahara Sekolah",
+  "description": "Aplikasi manajemen keuangan sekolah multi-tenant: pemasukan, pengeluaran, tagihan & pembayaran siswa, periode pembukuan, laporan, dan audit log. Backend Supabase (Postgres + Auth + Storage) dengan validasi saldo dan RLS per-organisasi di level database."
 }

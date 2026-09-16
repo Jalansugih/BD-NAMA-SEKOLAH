@@ -10,6 +10,10 @@ import { MasterSumberDana, AuditLog } from '../types';
 interface PengaturanViewProps {
   currentLembaga: string;
   jenisLembaga: string;
+  npsn: string;
+  alamat: string;
+  kontak: string;
+  website: string;
   logoDataUrl: string | null;
   masterKelas: string[];
   masterSumberDana: MasterSumberDana[];
@@ -20,7 +24,7 @@ interface PengaturanViewProps {
   periodeAktifNama: string;
   periodeAktifTanggalMulai: string;
   periodeAktifStatus: 'AKTIF' | 'DITUTUP' | null;
-  onUpdateLembaga: (nama: string, jenis: string) => void;
+  onUpdateLembaga: (data: { nama: string; jenis: string; npsn: string; alamat: string; kontak: string; website: string }) => void;
   onLogoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onRemoveLogo: () => void;
   onOpenWizard: () => void;
@@ -81,6 +85,10 @@ const SectionEyebrow: React.FC<{
 export const PengaturanView: React.FC<PengaturanViewProps> = ({
   currentLembaga,
   jenisLembaga,
+  npsn,
+  alamat,
+  kontak,
+  website,
   logoDataUrl,
   masterKelas,
   masterSumberDana,
@@ -118,6 +126,14 @@ export const PengaturanView: React.FC<PengaturanViewProps> = ({
   useEffect(() => setInputKasAwal(String(saldoAwal ?? 0)), [saldoAwal]);
   const [namaLembagaInput, setNamaLembagaInput] = useState<string>(currentLembaga);
   const [jenisLembagaInput, setJenisLembagaInput] = useState<string>(jenisLembaga);
+  const [npsnInput, setNpsnInput] = useState<string>(npsn || '');
+  const [alamatInput, setAlamatInput] = useState<string>(alamat || '');
+  const [kontakInput, setKontakInput] = useState<string>(kontak || '');
+  const [websiteInput, setWebsiteInput] = useState<string>(website || '');
+  useEffect(() => setNpsnInput(npsn || ''), [npsn]);
+  useEffect(() => setAlamatInput(alamat || ''), [alamat]);
+  useEffect(() => setKontakInput(kontak || ''), [kontak]);
+  useEffect(() => setWebsiteInput(website || ''), [website]);
   const [isWizardModalOpen, setIsWizardModalOpen] = useState<boolean>(false);
   const [wizardStep, setWizardStep] = useState<number>(1);
 
@@ -126,7 +142,14 @@ export const PengaturanView: React.FC<PengaturanViewProps> = ({
       showToast('Nama Lembaga tidak boleh kosong');
       return;
     }
-    onUpdateLembaga(namaLembagaInput.trim(), jenisLembagaInput);
+    onUpdateLembaga({
+      nama: namaLembagaInput.trim(),
+      jenis: jenisLembagaInput,
+      npsn: npsnInput.trim(),
+      alamat: alamatInput.trim(),
+      kontak: kontakInput.trim(),
+      website: websiteInput.trim()
+    });
     showToast('Profil & Identitas Lembaga berhasil disimpan!');
   };
 
@@ -279,6 +302,53 @@ export const PengaturanView: React.FC<PengaturanViewProps> = ({
                   className="w-full bg-slate-50/70 border border-slate-200 rounded-[12px] px-3 py-2.5 text-xs font-medium text-slate-800 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
                 />
               </div>
+            </div>
+
+            {/* Detail Kop Surat -- tampil di kepala setiap laporan cetak */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">NPSN</label>
+                <input
+                  type="text"
+                  value={npsnInput}
+                  onChange={(e) => setNpsnInput(e.target.value)}
+                  placeholder="Nomor Pokok Sekolah Nasional"
+                  className="w-full bg-slate-50/70 border border-slate-200 rounded-[12px] px-3 py-2.5 text-xs font-medium text-slate-800 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Kontak (Telepon / Email)</label>
+                <input
+                  type="text"
+                  value={kontakInput}
+                  onChange={(e) => setKontakInput(e.target.value)}
+                  placeholder="0263-xxxxxxx / nama@sekolah.sch.id"
+                  className="w-full bg-slate-50/70 border border-slate-200 rounded-[12px] px-3 py-2.5 text-xs font-medium text-slate-800 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Alamat Lengkap</label>
+                <input
+                  type="text"
+                  value={alamatInput}
+                  onChange={(e) => setAlamatInput(e.target.value)}
+                  placeholder="Jl. Contoh No. 1, Kecamatan, Kabupaten/Kota"
+                  className="w-full bg-slate-50/70 border border-slate-200 rounded-[12px] px-3 py-2.5 text-xs font-medium text-slate-800 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Website (opsional)</label>
+                <input
+                  type="text"
+                  value={websiteInput}
+                  onChange={(e) => setWebsiteInput(e.target.value)}
+                  placeholder="www.sekolah.sch.id"
+                  className="w-full bg-slate-50/70 border border-slate-200 rounded-[12px] px-3 py-2.5 text-xs font-medium text-slate-800 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
+                />
+              </div>
+              <p className="md:col-span-2 text-[11px] text-slate-400 -mt-1">
+                Field ini otomatis tampil di kop setiap laporan cetak. Kosongkan yang tidak diperlukan.
+              </p>
             </div>
 
             {/* Logo Upload */}
